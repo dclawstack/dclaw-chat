@@ -1,0 +1,21 @@
+[package]
+name = "dclaw-chat"
+version = "0.1.0"
+description = "DClaw Chat — AI conversations that remember"
+authors = ["DClawstack"]
+license = "MIT"
+repository = "https://github.com/dclawstack/dclaw-chat"
+edition = "2021"
+rust-version = "1.70"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0-beta", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0-beta", features = [] }
+tauri-plugin-shell = "2.0.0-beta"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
