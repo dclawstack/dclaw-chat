@@ -6,6 +6,8 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import { ModelSelector } from "./ModelSelector";
+import { SwarmStatus } from "@/components/swarm/SwarmStatus";
+import { swarmOrchestrator } from "@/lib/swarm";
 import { Button } from "@/components/ui/button";
 import { Menu, Shield } from "lucide-react";
 
@@ -64,6 +66,13 @@ export function ChatContainer() {
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState("gemma-4b");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeAgents, setActiveAgents] = useState<string[]>([]);
+  const [currentPlan, setCurrentPlan] = useState<{
+    intent: string;
+    primaryAgent: string;
+    supportingAgents: string[];
+    reasoning: string;
+  } | undefined>();
 
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
@@ -80,17 +89,23 @@ export function ChatContainer() {
     setConversations((prev) => [newConversation, ...prev]);
     setActiveConversationId(newConversation.id);
     setIsSidebarOpen(false);
+    setCurrentPlan(undefined);
+    setActiveAgents([]);
   }, []);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversationId(id);
     setIsSidebarOpen(false);
+    setCurrentPlan(undefined);
+    setActiveAgents([]);
   }, []);
 
   const handleDeleteConversation = useCallback((id: string) => {
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (activeConversationId === id) {
       setActiveConversationId(null);
+      setCurrentPlan(undefined);
+      setActiveAgents([]);
     }
   }, [activeConversationId]);
 
@@ -120,15 +135,44 @@ export function ChatContainer() {
       setError(null);
 
       try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Build agent context from conversation history
+        const conversation = conversations.find((c) => c.id === activeConversationId);
+        const history = conversation?.messages.map((m) => ({
+          id: m.id,
+          from: m.role === "user" ? "user" : "assistant",
+          to: m.role === "user" ? "assistant" : "user",
+          content: m.content,
+          type: "request" as const,
+          timestamp: m.timestamp,
+        })) || [];
+
+        // Run swarm orchestrator
+        const result = await swarmOrchestrator.execute({
+          conversationId: activeConversationId,
+          userMessage: content,
+          history,
+          model: selectedModel,
+        });
+
+        // Extract plan for UI
+        const plan = result.metadata?.orchestratorPlan as {
+          intent: string;
+          primaryAgent: string;
+          supportingAgents: string[];
+          reasoning: string;
+        } | undefined;
+
+        if (plan) {
+          setCurrentPlan(plan);
+          setActiveAgents([plan.primaryAgent, ...plan.supportingAgents]);
+        }
 
         const model = MODELS.find((m) => m.id === selectedModel);
 
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: `This is a simulated response from ${model?.name || "AI"}. In production, this would connect to:\n\n- **Local**: Ollama (Gemma 4B/27B, Qwen 32B) on your M4 Mac\n- **Cloud**: OpenRouter + Kimi K2.5 via ClawShield PII anonymization\n\nYour message: "${content.substring(0, 100)}${content.length > 100 ? "..." : ""}"`,
+          content: result.content,
           timestamp: new Date(),
           model: model?.name,
         };
@@ -168,7 +212,7 @@ export function ChatContainer() {
         setIsLoading(false);
       }
     },
-    [activeConversationId, selectedModel, handleNewConversation]
+    [activeConversationId, selectedModel, handleNewConversation, conversations]
   );
 
   return (
@@ -242,6 +286,9 @@ export function ChatContainer() {
           messages={activeConversation?.messages || []}
           isLoading={isLoading}
         />
+
+        {/* Swarm Status */}
+        <SwarmStatus activeAgents={activeAgents} currentPlan={currentPlan} />
 
         {/* Input */}
         <ChatInput
