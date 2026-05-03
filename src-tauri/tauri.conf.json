@@ -47,7 +47,7 @@
       "exceptionDomain": "",
       "signingIdentity": "-",
       "entitlements": null,
-      " hardenedRuntime": false
+      "hardenedRuntime": false
     },
     "windows": {
       "certificateThumbprint": null,
