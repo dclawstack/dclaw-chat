@@ -1,0 +1,52 @@
+name: Deploy DClaw Chat
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  HELM_RELEASE: dclaw-chat
+  HELM_NAMESPACE: dclaw-chat
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy with Helm
+        run: |
+          export KUBECONFIG=kubeconfig
+          helm upgrade --install ${{ env.HELM_RELEASE }} ./helm/dclaw-chat \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --create-namespace \
+            --values ./helm/dclaw-chat/values.yaml \
+            --set frontend.image.tag=${{ github.sha }} \
+            --set backend.image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl get pods -n ${{ env.HELM_NAMESPACE }}
+          kubectl get svc -n ${{ env.HELM_NAMESPACE }}
+          kubectl get ingress -n ${{ env.HELM_NAMESPACE }}

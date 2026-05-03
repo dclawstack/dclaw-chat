@@ -1,0 +1,80 @@
+# Default values for dclaw-chat
+
+replicaCount: 2
+
+frontend:
+  image:
+    repository: ghcr.io/dclawstack/dclaw-chat
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 3000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+backend:
+  image:
+    repository: ghcr.io/dclawstack/dclaw-chat-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 8000
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  env:
+    - name: DATABASE_URL
+      value: "postgresql+asyncpg://postgres:postgres@dclaw-chat-db-rw:5432/dclaw_chat"
+    - name: OPENROUTER_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: dclaw-chat-secrets
+          key: openrouter-api-key
+
+database:
+  enabled: true
+  storage: 10Gi
+  instances: 1
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+
+ingress:
+  enabled: true
+  className: nginx
+  host: chat.dclawstack.io
+  tls:
+    enabled: true
+    secretName: dclaw-chat-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+service:
+  type: ClusterIP
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}

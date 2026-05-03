@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dclaw-chat.fullname" . }}-frontend
+  labels:
+    {{- include "dclaw-chat.labels" . | nindent 4 }}
+    component: frontend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dclaw-chat.selectorLabels" . | nindent 6 }}
+      component: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "dclaw-chat.selectorLabels" . | nindent 8 }}
+        component: frontend
+    spec:
+      serviceAccountName: {{ include "dclaw-chat.serviceAccountName" . }}
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.frontend.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dclaw-chat.fullname" . }}-backend
+  labels:
+    {{- include "dclaw-chat.labels" . | nindent 4 }}
+    component: backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dclaw-chat.selectorLabels" . | nindent 6 }}
+      component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "dclaw-chat.selectorLabels" . | nindent 8 }}
+        component: backend
+    spec:
+      serviceAccountName: {{ include "dclaw-chat.serviceAccountName" . }}
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.backend.port }}
+              protocol: TCP
+          env:
+            {{- toYaml .Values.backend.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
