@@ -10,18 +10,32 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        dclaw: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-          950: "#172554",
+        /* App-specific brand (Chat = Blue) */
+        brand: {
+          DEFAULT: "#3B82F6",
+          light: "#60A5FA",
+          deep: "#1D4ED8",
+          wash: "rgba(59, 130, 246, 0.08)",
+        },
+        /* DKube Design System */
+        dk: {
+          purple: {
+            DEFAULT: "#6B53A3",
+            light: "#9985BF",
+            deep: "#4A3A7A",
+            wash: "rgba(107, 83, 163, 0.08)",
+          },
+          surface: {
+            DEFAULT: "#0E0E10",
+            raised: "#1F1F23",
+            elevated: "#2A2A30",
+          },
+          border: "rgba(255, 255, 255, 0.08)",
+          body: "#F4F2F8",
+          muted: {
+            DEFAULT: "#9E9AAB",
+            darker: "#6E6E76",
+          },
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,10 +71,20 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      fontFamily: {
+        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        display: ["var(--font-manrope)", "Manrope", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains)", "JetBrains Mono", "ui-monospace", "monospace"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        "dk-sm": "0 1px 2px rgba(0, 0, 0, 0.25)",
+        "dk-md": "0 4px 12px rgba(0, 0, 0, 0.35)",
+        "dk-lg": "0 8px 24px rgba(0, 0, 0, 0.45)",
       },
     },
   },
