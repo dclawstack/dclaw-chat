@@ -31,4 +31,4 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--model claude-opus-4-7 --max-turns 10"
+          claude_args: "--bare --model claude-opus-4-7 --max-turns 10"
