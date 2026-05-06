@@ -1,33 +1,65 @@
 # Configuration
 
-## Environment Variables
+DClaw Chat is configured via environment variables. Create a `.env` file in the `backend/` directory.
 
-### Backend
+## Core Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_chat` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
-| `CORS_ORIGINS` | Allowed CORS origins | `*` |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_chat` | PostgreSQL connection string |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama API endpoint |
+| `OPENROUTER_API_KEY` | — | OpenRouter API key (required for cloud models) |
+| `OPENROUTER_URL` | `https://openrouter.ai/api/v1` | OpenRouter base URL |
 
-### Frontend
+## Auth Settings (Logto)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_API_URL` | Backend API base URL | `/api` |
-| `NEXT_PUBLIC_APP_NAME` | App display name | `DClaw Chat` |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOGTO_ENDPOINT` | — | Logto server URL |
+| `LOGTO_AUDIENCE` | — | Logto API resource identifier |
+| `LOGTO_JWKS_URL` | — | Logto JWKS endpoint for JWT validation |
 
-## Kubernetes Resources
+When auth is configured, all API endpoints (except `/health`) require a valid JWT Bearer token.
 
-Adjust resource limits in the DClawApp CRD:
+## CORS Settings
 
-```yaml
-spec:
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-    requests:
-      cpu: 250m
-      memory: 512Mi
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3002,http://localhost:1420` | Comma-separated allowed origins |
+
+## Frontend Environment
+
+Create `frontend/.env.local`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend API base URL |
+
+## Model Configuration
+
+Models are defined in `backend/app/services/chat_service.py`:
+
+```python
+MODEL_PROVIDERS = {
+    "gemma-4b": "local",
+    "gemma-27b": "local",
+    "qwen-32b": "local",
+    "kimi-k2.5": "cloud",
+    "claude-3.5-sonnet": "cloud",
+    "gpt-4o": "cloud",
+}
 ```
+
+To add a new model:
+1. Add the entry to `MODEL_PROVIDERS`
+2. If local, add the Ollama mapping in `ollama_service.py`
+3. If cloud, add the OpenRouter mapping in `openrouter_service.py`
+
+## Kubernetes / Helm
+
+See `helm/dclaw-chat/values.yaml` for production configuration:
+- Replica counts
+- Resource limits
+- Ingress hosts
+- TLS settings
+- Database storage

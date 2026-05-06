@@ -1,21 +1,24 @@
 # Troubleshooting
 
-Common issues and solutions for DClaw Chat.
+Common issues and their solutions.
 
 ## Quick Diagnostics
 
 ```bash
-# Check app pods
-kubectl get pods -n dclaw-chat
+# Backend health
+curl http://localhost:8000/api/v1/health
 
-# Check logs
-kubectl logs -n dclaw-chat deployment/dclaw-chat-backend
+# Database connectivity
+curl http://localhost:8000/api/v1/health/detailed
 
-# Check database
-kubectl get clusters -n dclaw-chat
+# Frontend build
+cd frontend && npm run build
+
+# Backend tests
+cd backend && pytest
 ```
 
-## Sections
+## Categories
 
 - [Common Issues](./common-issues)
 - [FAQ](./faq)

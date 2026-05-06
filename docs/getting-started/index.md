@@ -1,19 +1,26 @@
 # Getting Started with DClaw Chat
 
-Welcome to DClaw Chat. This guide will help you install, configure, and start using the app.
+DClaw Chat is an AI-native conversation platform that remembers context across sessions. It supports both local LLMs (via Ollama) and cloud models (via OpenRouter).
 
-## What is DClaw Chat?
+## What You'll Build
 
-DClaw Chat — AI conversations that remember
+A fully functional chat application with:
+- **Persistent conversations** stored in PostgreSQL
+- **Multi-model support** — switch between local and cloud LLMs
+- **Real-time streaming** responses
+- **Dark mode** UI built with Tailwind CSS
+- **Kubernetes-ready** deployment via Helm
 
 ## Prerequisites
 
-- DClaw Platform installed (see [Platform Installation](../../ecosystem/getting-started/installation))
-- Kubernetes cluster access
-- App enabled in DPanel
+- **Node.js** 18+ and **npm**
+- **Python** 3.11+ with **uv** or **pip**
+- **PostgreSQL** 15+ (or use the provided CloudNativePG Helm chart)
+- **Ollama** (optional, for local models)
+- **Docker** (optional, for containerized builds)
 
 ## Quick Links
 
-- [Installation](./installation)
-- [Quickstart](./quickstart)
-- [Configuration](./configuration)
+- [Installation](./installation) — Step-by-step setup
+- [Quickstart](./quickstart) — 5-minute tutorial
+- [Configuration](./configuration) — Environment variables and customization

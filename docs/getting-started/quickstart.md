@@ -1,20 +1,69 @@
 # Quickstart
 
-## Step 1: Open the App
+Get DClaw Chat running and send your first AI message in under 5 minutes.
 
-Navigate to `https://chat.yourdomain.com` or click **Open App** in DPanel.
+## 1. Start Everything
 
-## Step 2: First Use
+Make sure both backend and frontend are running:
 
-Follow the on-screen prompts to complete the initial setup.
+```bash
+# Terminal 1: Backend
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
 
-## Step 3: Configure Settings
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+```
 
-1. Go to the app settings page
-2. Adjust preferences for your environment
-3. Save changes
+## 2. Open the App
 
-## Next Steps
+Navigate to `http://localhost:3000` in your browser.
 
-- Read the [Guides](../guides) for detailed use cases
-- Check the [Reference](../reference) for API docs and architecture
+## 3. Create a Conversation
+
+Click **"New Chat"** in the sidebar. A new conversation thread is created automatically.
+
+## 4. Send a Message
+
+Type a message in the input box and press **Enter** (or click the send button).
+
+The app will:
+1. Store your message in PostgreSQL
+2. Route it to the selected LLM (Ollama local or OpenRouter cloud)
+3. Stream the AI response back
+4. Save the assistant's reply to the database
+
+## 5. Switch Models
+
+Use the model selector in the top bar to switch between:
+- **Gemma 4B** — Fast, local, privacy-preserving
+- **Claude 3.5 Sonnet** — Powerful reasoning (cloud)
+- **GPT-4o** — General purpose (cloud)
+
+## 6. Organize Conversations
+
+- **Rename**: Click the conversation title to edit
+- **Folders**: Drag conversations into folders
+- **Delete**: Hover and click the trash icon
+
+## Example API Call
+
+You can also interact via the REST API directly:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "conversation_id": "conv-123",
+    "messages": [{"role": "user", "content": "Hello, DClaw!"}],
+    "model": "gemma-4b"
+  }'
+```
+
+## What's Next?
+
+- [Best Practices](../guides/best-practices) — Security and performance tips
+- [Use Cases](../guides/use-cases) — Real-world scenarios

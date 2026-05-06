@@ -1,44 +1,91 @@
 # Common Issues
 
-## App won't start
+## Backend
 
-**Symptoms:** Pods in `CrashLoopBackOff` or `Error` state.
+### `ModuleNotFoundError: No module named 'app'`
 
-**Solutions:**
+**Cause:** Running from wrong directory.
 
+**Fix:**
 ```bash
-# Check logs
-kubectl logs -n dclaw-chat deployment/dclaw-chat-backend
-
-# Check events
-kubectl get events -n dclaw-chat --sort-by='.lastTimestamp'
-
-# Verify database connection
-kubectl exec -n dclaw-chat deployment/dclaw-chat-backend --   python -c "import asyncio; from sqlalchemy import text; ..."
+cd backend
+python -m uvicorn app.main:app --reload
 ```
 
-## Database connection errors
+### `sqlalchemy.exc.OperationalError: connection refused`
 
-**Symptoms:** Backend logs show `connection refused` or `timeout`.
+**Cause:** PostgreSQL is not running or DATABASE_URL is incorrect.
 
-**Solutions:**
+**Fix:**
+```bash
+# Check PostgreSQL is running
+pg_isready -h localhost -p 5432
 
-1. Verify the database cluster is ready:
-   ```bash
-   kubectl get clusters -n dclaw-chat
-   ```
+# Or use Docker
+ docker run -d --name pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:15
+```
 
-2. Check the connection string secret:
-   ```bash
-   kubectl get secret dclaw-chat-db-credentials -n dclaw-chat
-   ```
+### `502 Bad Gateway` on chat completion
 
-## Frontend can't reach backend
+**Cause:** Ollama is not running.
 
-**Symptoms:** Browser console shows CORS errors or 502 Bad Gateway.
+**Fix:**
+```bash
+ollama serve
+# In another terminal:
+ollama pull gemma:4b
+```
 
-**Solutions:**
+Or switch to a cloud model in the UI.
 
-1. Verify backend pod is running
-2. Check ingress configuration
-3. Verify `NEXT_PUBLIC_API_URL` is set correctly
+### `401 Unauthorized` on all API calls
+
+**Cause:** Logto is not configured or token is expired.
+
+**Fix:**
+- For development, set a mock JWT or disable auth
+- For production, verify `LOGTO_ENDPOINT` and `LOGTO_AUDIENCE`
+
+## Frontend
+
+### `npm run build` fails with "Cannot find module"
+
+**Cause:** Dependencies not installed.
+
+**Fix:**
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### Blank page after build
+
+**Cause:** `NEXT_PUBLIC_API_URL` not set.
+
+**Fix:**
+```bash
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > frontend/.env.local
+```
+
+## Kubernetes
+
+### Pod stuck in `CrashLoopBackOff`
+
+**Cause:** Backend can't connect to database.
+
+**Fix:**
+```bash
+kubectl logs -n dclaw-chat deployment/dclaw-chat-backend
+kubectl get clusters -n dclaw-chat  # Verify CloudNativePG cluster is ready
+```
+
+### Ingress returns 502
+
+**Cause:** Backend service not ready.
+
+**Fix:**
+```bash
+kubectl get pods -n dclaw-chat
+kubectl describe ingress -n dclaw-chat
+```

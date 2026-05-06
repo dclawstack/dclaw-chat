@@ -1,12 +1,8 @@
 # Releases
 
-Release notes for DClaw Chat.
-
-## Current Version
-
-**DClaw Chat v0.2.0**
+Release notes and roadmap for DClaw Chat.
 
 ## Sections
 
-- [Changelog](./changelog)
-- [Roadmap](./roadmap)
+- [Changelog](./changelog) — Version history
+- [Roadmap](./roadmap) — Upcoming features
