@@ -1,0 +1,49 @@
+{
+  "app_id": "chat",
+  "version": "0.2.0",
+  "title": "DClaw Chat",
+  "nav": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "getting-started/index",
+        "getting-started/installation",
+        "getting-started/quickstart",
+        "getting-started/configuration"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/index",
+        "guides/use-cases",
+        "guides/best-practices"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        "reference/index",
+        "reference/architecture",
+        "reference/stack",
+        "reference/api"
+      ]
+    },
+    {
+      "group": "Troubleshooting",
+      "pages": [
+        "troubleshooting/index",
+        "troubleshooting/common-issues",
+        "troubleshooting/faq"
+      ]
+    },
+    {
+      "group": "Releases",
+      "pages": [
+        "releases/index",
+        "releases/changelog",
+        "releases/roadmap"
+      ]
+    }
+  ]
+}
