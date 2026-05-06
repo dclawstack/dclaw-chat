@@ -9,7 +9,8 @@
         "getting-started/index",
         "getting-started/installation",
         "getting-started/quickstart",
-        "getting-started/configuration"
+        "getting-started/configuration",
+        "getting-started/deployment"
       ]
     },
     {
