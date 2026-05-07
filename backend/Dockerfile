@@ -18,7 +18,6 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy application code
 COPY --from=builder /app/app ./app
-COPY .env ./
 
 # Non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
