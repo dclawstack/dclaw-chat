@@ -1,20 +1,21 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { AIModel, MODELS } from "@/types/chat";
+import { AIModel } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Check } from "lucide-react";
 
 interface ModelSelectorProps {
   selectedModel: string;
   onSelect: (modelId: string) => void;
+  models: AIModel[];
 }
 
-export function ModelSelector({ selectedModel, onSelect }: ModelSelectorProps) {
+export function ModelSelector({ selectedModel, onSelect, models }: ModelSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selected = MODELS.find((m) => m.id === selectedModel) || MODELS[0];
+  const selected = models.find((m) => m.id === selectedModel) || models[0];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -37,7 +38,7 @@ export function ModelSelector({ selectedModel, onSelect }: ModelSelectorProps) {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 text-xs"
       >
-        <span>{selected.icon}</span>
+        <span>{selected.icon || (selected.provider === "cloud" ? "☁️" : "🖥️")}</span>
         <span className="hidden sm:inline">{selected.name}</span>
         <ChevronDown className="h-3 w-3" />
       </Button>
@@ -47,7 +48,7 @@ export function ModelSelector({ selectedModel, onSelect }: ModelSelectorProps) {
           <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
             Local Models
           </div>
-          {MODELS.filter((m) => m.provider === "local").map((model) => (
+          {models.filter((m) => m.provider === "local").map((model) => (
             <ModelOption
               key={model.id}
               model={model}
@@ -62,7 +63,7 @@ export function ModelSelector({ selectedModel, onSelect }: ModelSelectorProps) {
           <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-1">
             Cloud Models
           </div>
-          {MODELS.filter((m) => m.provider === "cloud").map((model) => (
+          {models.filter((m) => m.provider === "cloud").map((model) => (
             <ModelOption
               key={model.id}
               model={model}
@@ -95,7 +96,7 @@ function ModelOption({
         isSelected ? "bg-accent" : ""
       }`}
     >
-      <span className="text-base">{model.icon}</span>
+      <span className="text-base">{model.icon || (model.provider === "cloud" ? "☁️" : "🖥️")}</span>
       <div className="flex-1 text-left">
         <div className="font-medium">{model.name}</div>
         <div className="text-xs text-muted-foreground">{model.description}</div>

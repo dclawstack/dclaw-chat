@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Message, Conversation, MODELS } from "@/types/chat";
+import { useState, useCallback, useEffect } from "react";
+import { Message, Conversation, AIModel, MODELS } from "@/types/chat";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import { ModelSelector } from "./ModelSelector";
 import { SwarmStatus } from "@/components/swarm/SwarmStatus";
-import { swarmOrchestrator } from "@/lib/swarm";
+import { chatComplete, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Menu, Shield } from "lucide-react";
 
@@ -65,6 +65,7 @@ export function ChatContainer() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState("gemma-4b");
+  const [availableModels, setAvailableModels] = useState<AIModel[]>(MODELS);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeAgents, setActiveAgents] = useState<string[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{
@@ -77,6 +78,23 @@ export function ChatContainer() {
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
   );
+
+  // Fetch available models from backend on mount
+  useEffect(() => {
+    listModels()
+      .then((models) => {
+        setAvailableModels(models);
+        // If current selection isn't available, pick first available
+        const currentAvailable = models.find((m) => m.id === selectedModel)?.available;
+        if (!currentAvailable) {
+          const firstAvailable = models.find((m) => m.available);
+          if (firstAvailable) setSelectedModel(firstAvailable.id);
+        }
+      })
+      .catch(() => {
+        // Fallback to hardcoded models if backend unreachable
+      });
+  }, []);
 
   const handleNewConversation = useCallback(() => {
     const newConversation: Conversation = {
@@ -135,44 +153,53 @@ export function ChatContainer() {
       setError(null);
 
       try {
-        // Build agent context from conversation history
         const conversation = conversations.find((c) => c.id === activeConversationId);
-        const history = conversation?.messages.map((m) => ({
-          id: m.id,
-          from: m.role === "user" ? "user" : "assistant",
-          to: m.role === "user" ? "assistant" : "user",
-          content: m.content,
-          type: "request" as const,
-          timestamp: m.timestamp,
-        })) || [];
 
-        // Run swarm orchestrator
-        const result = await swarmOrchestrator.execute({
-          conversationId: activeConversationId,
-          userMessage: content,
-          history,
+        // Build messages for backend API
+        const apiMessages = conversation?.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })) || [];
+        apiMessages.push({ role: "user" as const, content });
+
+        // Generate swarm plan for UI visualization
+        const lower = content.toLowerCase();
+        let intent = "general";
+        if (/\b(write|code|function|script|debug|python|javascript|rust|go|typescript|sql)\b/i.test(lower)) intent = "code";
+        else if (/\b(search|find|what is|who is|how to|explain|compare|difference)\b/i.test(lower)) intent = "research";
+        else if (/\b(remember|recall|previous|last time|summary|summarize)\b/i.test(lower)) intent = "memory";
+        else if (/\b(anonymize|pii|privacy|gdpr|hipaa)\b/i.test(lower)) intent = "shield";
+
+        const agentNames: Record<string, string> = {
+          code: "Code Assistant",
+          research: "Research Assistant",
+          memory: "Memory Assistant",
+          shield: "ClawShield",
+          general: "General Assistant",
+        };
+
+        setCurrentPlan({
+          intent,
+          primaryAgent: agentNames[intent],
+          supportingAgents: intent !== "shield" ? ["ClawShield"] : [],
+          reasoning: `Detected ${intent} intent from message`,
+        });
+        setActiveAgents([agentNames[intent], "ClawShield"]);
+
+        // Call backend API for real LLM response
+        const result = await chatComplete({
+          conversation_id: activeConversationId,
+          messages: apiMessages,
           model: selectedModel,
+          temperature: 0.7,
         });
 
-        // Extract plan for UI
-        const plan = result.metadata?.orchestratorPlan as {
-          intent: string;
-          primaryAgent: string;
-          supportingAgents: string[];
-          reasoning: string;
-        } | undefined;
-
-        if (plan) {
-          setCurrentPlan(plan);
-          setActiveAgents([plan.primaryAgent, ...plan.supportingAgents]);
-        }
-
-        const model = MODELS.find((m) => m.id === selectedModel);
+        const model = availableModels.find((m) => m.id === selectedModel);
 
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: result.content,
+          content: result.message.content,
           timestamp: new Date(),
           model: model?.name,
         };
@@ -264,6 +291,7 @@ export function ChatContainer() {
             <ModelSelector
               selectedModel={selectedModel}
               onSelect={setSelectedModel}
+              models={availableModels}
             />
           </div>
         </header>

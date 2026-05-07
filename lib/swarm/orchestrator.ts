@@ -97,7 +97,7 @@ export class SwarmOrchestrator {
     const plan = await this.classifyIntent(ctx.userMessage);
     this.conversationState.set(ctx.conversationId, plan);
 
-    const primary = this.registry.get(plan.primaryAgent.toLowerCase().replace(/\s+/g, "-"));
+    const primary = this.registry.findByName(plan.primaryAgent);
     if (!primary) {
       return {
         content: "I'm not sure how to handle that. Could you rephrase?",

@@ -21,7 +21,8 @@ export interface AIModel {
   name: string;
   provider: "local" | "cloud";
   description: string;
-  icon: string;
+  icon?: string;
+  available?: boolean;
 }
 
 export interface ChatState {
@@ -34,6 +35,7 @@ export interface ChatState {
   isVoiceMode: boolean;
 }
 
+// Fallback models used when backend is unreachable
 export const MODELS: AIModel[] = [
   {
     id: "gemma-4b",
@@ -43,17 +45,24 @@ export const MODELS: AIModel[] = [
     icon: "🖥️",
   },
   {
-    id: "gemma-27b",
-    name: "Gemma 27B",
+    id: "qwen-32b",
+    name: "Qwen 3.5 35B",
     provider: "local",
-    description: "High-quality local inference",
+    description: "Best local model (M4 96GB)",
     icon: "🖥️",
   },
   {
-    id: "qwen-32b",
-    name: "Qwen 32B",
+    id: "nemotron-cascade-2",
+    name: "Nemotron Cascade 2",
     provider: "local",
-    description: "Best local model (M4 96GB)",
+    description: "NVIDIA Nemotron local inference",
+    icon: "🖥️",
+  },
+  {
+    id: "glm-4.7-flash",
+    name: "GLM 4.7 Flash",
+    provider: "local",
+    description: "Zhipu GLM local inference",
     icon: "🖥️",
   },
   {
@@ -61,6 +70,34 @@ export const MODELS: AIModel[] = [
     name: "Kimi K2.5",
     provider: "cloud",
     description: "OpenRouter cloud fallback",
+    icon: "☁️",
+  },
+  {
+    id: "claude-3.5-sonnet",
+    name: "Claude 3.5 Sonnet",
+    provider: "cloud",
+    description: "Anthropic Claude via OpenRouter",
+    icon: "☁️",
+  },
+  {
+    id: "claude-3-opus",
+    name: "Claude 3 Opus",
+    provider: "cloud",
+    description: "Anthropic Claude Max via OpenRouter",
+    icon: "☁️",
+  },
+  {
+    id: "gpt-4o",
+    name: "GPT-4o",
+    provider: "cloud",
+    description: "OpenAI GPT-4o via OpenRouter",
+    icon: "☁️",
+  },
+  {
+    id: "deepseek-v4",
+    name: "DeepSeek V4",
+    provider: "cloud",
+    description: "DeepSeek V4 Pro via NVIDIA NIMs (free tier)",
     icon: "☁️",
   },
 ];

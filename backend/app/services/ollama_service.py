@@ -7,11 +7,26 @@ from app.core.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+# Mapping from frontend model IDs to Ollama model names
 OLLAMA_MODELS = {
-    "gemma-4b": "gemma:4b",
-    "gemma-27b": "gemma:27b",
-    "qwen-32b": "qwen:32b",
+    "gemma-4b": "gemma4:latest",
+    "qwen-32b": "qwen3.5:35b",
+    "nemotron-cascade-2": "nemotron-cascade-2:latest",
+    "glm-4.7-flash": "glm-4.7-flash:latest",
+    "orpheus-3b": "legraphista/Orpheus:3b-ft-q8",
 }
+
+# Friendly names for discovered Ollama models
+OLLAMA_MODEL_NAMES = {
+    "gemma4:latest": "Gemma 4B",
+    "qwen3.5:35b": "Qwen 3.5 35B",
+    "glm-4.7-flash:latest": "GLM 4.7 Flash",
+    "nemotron-cascade-2:latest": "Nemotron Cascade 2",
+    "legraphista/Orpheus:3b-ft-q8": "Orpheus 3B",
+}
+
+# Reverse lookup: Ollama name → frontend ID
+OLLAMA_NAME_TO_ID = {v: k for k, v in OLLAMA_MODELS.items()}
 
 
 class OllamaService:
@@ -48,3 +63,9 @@ class OllamaService:
         except Exception as e:
             logger.warning(f"Ollama list models failed: {e}")
             return []
+
+    def get_model_display_name(self, ollama_name: str) -> str:
+        return OLLAMA_MODEL_NAMES.get(ollama_name, ollama_name)
+
+    def get_model_id(self, ollama_name: str) -> str:
+        return OLLAMA_NAME_TO_ID.get(ollama_name, ollama_name.replace(":", "-").replace("/", "-"))

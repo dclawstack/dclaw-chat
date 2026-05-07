@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = "http://localhost:11434"
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_URL: str = "https://openrouter.ai/api/v1"
+    NVIDIA_API_KEY: str = ""
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3002,http://localhost:1420"
