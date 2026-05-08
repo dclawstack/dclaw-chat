@@ -34,7 +34,7 @@ class ConversationRepository:
 
     async def create(self, data: ConversationCreate) -> ConversationORM:
         conversation = ConversationORM(
-            id=str(uuid.uuid4()),
+            id=data.id or str(uuid.uuid4()),
             title=data.title or "New Conversation",
             folder=data.folder,
             model=data.model,

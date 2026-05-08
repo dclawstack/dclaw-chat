@@ -46,7 +46,7 @@ docker compose build --no-cache
 docker compose up -d
 
 sleep 5
-docker exec dclaw-chat-ollama ollama pull gemma:4b || true
+docker exec dclaw-chat-ollama ollama pull gemma4:latest || true
 
 cp deploy/nginx.conf "/etc/nginx/sites-available/$DOMAIN"
 sed -i "s/chat.dclawstack.io/$DOMAIN/g" "/etc/nginx/sites-available/$DOMAIN"

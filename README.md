@@ -105,7 +105,14 @@ git clone https://github.com/dclawstack/dclaw-chat.git
 cd dclaw-chat
 ```
 
-### 2. Backend
+### 2. Environment
+
+```bash
+cp .env.example .env
+# Edit .env and add your OPENROUTER_API_KEY if using cloud models
+```
+
+### 3. Backend
 
 ```bash
 cd backend

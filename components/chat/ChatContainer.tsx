@@ -156,11 +156,11 @@ export function ChatContainer() {
         const conversation = conversations.find((c) => c.id === activeConversationId);
 
         // Build messages for backend API
+        // conversation.messages already includes the user message from state update above
         const apiMessages = conversation?.messages.map((m) => ({
           role: m.role,
           content: m.content,
         })) || [];
-        apiMessages.push({ role: "user" as const, content });
 
         // Generate swarm plan for UI visualization
         const lower = content.toLowerCase();
@@ -220,11 +220,12 @@ export function ChatContainer() {
           )
         );
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
+        const errorText = err instanceof Error ? err.message : "An error occurred";
+        setError(errorText);
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Sorry, I encountered an error processing your request.",
+          content: `⚠️ ${errorText}`,
           timestamp: new Date(),
           status: "error",
         };

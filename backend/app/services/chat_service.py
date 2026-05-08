@@ -46,15 +46,13 @@ class ChatService:
         if not conversation:
             conversation = await self.conv_repo.create(
                 ConversationCreate(
+                    id=req.conversation_id,
                     title=req.messages[0].content[:50] + "..."
                     if req.messages
                     else "New Chat",
                     model=req.model,
                 )
             )
-            # Update ID to match request
-            conversation.id = req.conversation_id
-            await self.db.commit()
 
         # Store user message
         user_msg = req.messages[-1] if req.messages else Message(role="user", content="")
@@ -145,7 +143,10 @@ class ChatService:
                     }
                 )
 
-        # Cloud models
+        # Cloud models — only mark available if API keys are configured
+        openrouter_available = bool(self.openrouter.api_key)
+        nvidia_available = bool(self.nvidia.api_key)
+
         models.extend(
             [
                 {
@@ -153,35 +154,35 @@ class ChatService:
                     "name": "Kimi K2.5",
                     "provider": "cloud",
                     "description": "Moonshot Kimi K2.5 via OpenRouter",
-                    "available": True,
+                    "available": openrouter_available,
                 },
                 {
                     "id": "claude-3.5-sonnet",
                     "name": "Claude 3.5 Sonnet",
                     "provider": "cloud",
                     "description": "Anthropic Claude 3.5 Sonnet via OpenRouter",
-                    "available": True,
+                    "available": openrouter_available,
                 },
                 {
                     "id": "claude-3-opus",
                     "name": "Claude 3 Opus",
                     "provider": "cloud",
                     "description": "Anthropic Claude 3 Opus via OpenRouter (Max)",
-                    "available": True,
+                    "available": openrouter_available,
                 },
                 {
                     "id": "gpt-4o",
                     "name": "GPT-4o",
                     "provider": "cloud",
                     "description": "OpenAI GPT-4o via OpenRouter",
-                    "available": True,
+                    "available": openrouter_available,
                 },
                 {
                     "id": "deepseek-v4",
                     "name": "DeepSeek V4",
                     "provider": "cloud",
                     "description": "DeepSeek V4 Pro via NVIDIA NIMs (free tier)",
-                    "available": True,
+                    "available": nvidia_available,
                 },
             ]
         )

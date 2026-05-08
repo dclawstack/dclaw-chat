@@ -6,6 +6,7 @@ from app.schemas.message import MessageOut
 
 
 class ConversationCreate(BaseModel):
+    id: Optional[str] = None
     title: Optional[str] = "New Conversation"
     folder: Optional[str] = None
     model: Optional[str] = "gemma-4b"
