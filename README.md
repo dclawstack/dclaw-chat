@@ -314,6 +314,14 @@ See [`docs/getting-started/configuration.md`](./docs/getting-started/configurati
 
 ---
 
+## Code Manager
+
+| Name | Role |
+|------|------|
+| Tharuni | Code Manager |
+
+---
+
 ## License
 
 MIT — see [LICENSE](./LICENSE) for details.
