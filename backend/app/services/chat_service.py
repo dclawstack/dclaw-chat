@@ -1,6 +1,6 @@
 import uuid
 import logging
-from typing import List, Optional
+from typing import AsyncGenerator, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.chat import Message, ChatCompletionRequest, ChatCompletionResponse
@@ -92,6 +92,54 @@ class ChatService:
             message=Message(role="assistant", content=content),
             model=req.model,
             usage={"prompt_tokens": 0, "completion_tokens": 0},
+        )
+
+    async def stream_complete(self, req: ChatCompletionRequest) -> AsyncGenerator[str, None]:
+        # Get or create conversation
+        conversation = await self.conv_repo.get_by_id(req.conversation_id)
+        if not conversation:
+            conversation = await self.conv_repo.create(
+                ConversationCreate(
+                    id=req.conversation_id,
+                    title=req.messages[0].content[:50] + "..."
+                    if req.messages
+                    else "New Chat",
+                    model=req.model,
+                )
+            )
+
+        # Store user message
+        user_msg = req.messages[-1] if req.messages else Message(role="user", content="")
+        await self.msg_repo.create(
+            conversation_id=req.conversation_id,
+            role=user_msg.role,
+            content=user_msg.content,
+        )
+
+        # Route to provider and collect tokens while streaming
+        provider = MODEL_PROVIDERS.get(req.model, "local")
+        full_content = []
+        try:
+            if provider == "local":
+                token_gen = self.ollama.chat_stream(req.model, req.messages, req.temperature)
+            elif provider == "nvidia":
+                token_gen = self.nvidia.chat_stream(req.model, req.messages, req.temperature)
+            else:
+                token_gen = self.openrouter.chat_stream(req.model, req.messages, req.temperature)
+
+            async for token in token_gen:
+                full_content.append(token)
+                yield token
+        except Exception as e:
+            logger.error(f"LLM stream error: {e}")
+            raise LLMException(f"Failed to generate response: {str(e)}")
+
+        # Store complete assistant message after streaming finishes
+        await self.msg_repo.create(
+            conversation_id=req.conversation_id,
+            role="assistant",
+            content="".join(full_content),
+            model=req.model,
         )
 
     async def list_models(self) -> List[dict]:

@@ -7,7 +7,7 @@ import { ChatInput } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import { ModelSelector } from "./ModelSelector";
 import { SwarmStatus } from "@/components/swarm/SwarmStatus";
-import { chatComplete, listModels } from "@/lib/api";
+import { chatStream, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Menu, Shield } from "lucide-react";
 
@@ -186,39 +186,85 @@ export function ChatContainer() {
         });
         setActiveAgents([agentNames[intent], "ClawShield"]);
 
-        // Call backend API for real LLM response
-        const result = await chatComplete({
-          conversation_id: activeConversationId,
-          messages: apiMessages,
-          model: selectedModel,
-          temperature: 0.7,
-        });
-
+        // Stream response from backend, appending tokens as they arrive
         const model = availableModels.find((m) => m.id === selectedModel);
+        const assistantMsgId = (Date.now() + 1).toString();
 
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: result.message.content,
-          timestamp: new Date(),
-          model: model?.name,
-        };
-
+        // Insert an empty assistant message placeholder
         setConversations((prev) =>
           prev.map((c) =>
             c.id === activeConversationId
               ? {
                   ...c,
-                  messages: [...c.messages, assistantMessage],
+                  messages: [
+                    ...c.messages,
+                    {
+                      id: assistantMsgId,
+                      role: "assistant" as const,
+                      content: "",
+                      timestamp: new Date(),
+                      model: model?.name,
+                    },
+                  ],
                   updatedAt: new Date(),
                   title:
-                    c.messages.length === 0
+                    c.messages.length === 1
                       ? content.substring(0, 40) + "..."
                       : c.title,
                 }
               : c
           )
         );
+
+        await chatStream(
+          {
+            conversation_id: activeConversationId,
+            messages: apiMessages,
+            model: selectedModel,
+            temperature: 0.7,
+          },
+          {
+            onToken: (token) => {
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === activeConversationId
+                    ? {
+                        ...c,
+                        messages: c.messages.map((m) =>
+                          m.id === assistantMsgId
+                            ? { ...m, content: m.content + token }
+                            : m
+                        ),
+                      }
+                    : c
+                )
+              );
+            },
+            onDone: () => {
+              setIsLoading(false);
+            },
+            onError: (err) => {
+              const errorText = err.message;
+              setError(errorText);
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === activeConversationId
+                    ? {
+                        ...c,
+                        messages: c.messages.map((m) =>
+                          m.id === assistantMsgId
+                            ? { ...m, content: `⚠️ ${errorText}`, status: "error" as const }
+                            : m
+                        ),
+                      }
+                    : c
+                )
+              );
+              setIsLoading(false);
+            },
+          }
+        );
+        return;
       } catch (err) {
         const errorText = err instanceof Error ? err.message : "An error occurred";
         setError(errorText);
