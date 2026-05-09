@@ -93,7 +93,8 @@ dclaw-chat/
 ## Database Rules
 
 1. All models MUST inherit from `Base` in `app.models.base` (which inherits `DeclarativeBase`)
-2. All models MUST use `Mapped[...]` and `mapped_column()` (SQLAlchemy 2.0 style)
+2. All models MUST use `Mapped[...]` and `mapped_column()`
+3. **Never use `default_factory=` in `mapped_column()`** — use `default=` instead (SQLAlchemy 2.0 style)
 3. Relationships MUST specify `lazy="selectin"` for async safety
 4. All new tables MUST get an alembic migration
 5. `ondelete="CASCADE"` for child tables; `ondelete="SET NULL"` for optional refs
