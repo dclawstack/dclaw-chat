@@ -1,6 +1,7 @@
+import json
 import httpx
 import logging
-from typing import List
+from typing import AsyncGenerator, List
 from app.schemas.chat import Message
 from app.core.config import get_settings
 
@@ -52,6 +53,34 @@ class OllamaService:
             content = data.get("message", {}).get("content", "")
             logger.info(f"Ollama response: {len(content)} chars")
             return content
+
+    async def chat_stream(
+        self, model: str, messages: List[Message], temperature: float = 0.7
+    ) -> AsyncGenerator[str, None]:
+        ollama_model = OLLAMA_MODELS.get(model, model)
+        payload = {
+            "model": ollama_model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "stream": True,
+            "options": {"temperature": temperature},
+        }
+        logger.info(f"Ollama stream request: model={ollama_model}, msgs={len(messages)}")
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    token = data.get("message", {}).get("content", "")
+                    if token:
+                        yield token
+                    if data.get("done"):
+                        break
 
     async def list_models(self) -> List[dict]:
         try:
