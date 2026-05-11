@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "outputDirectory": ".next",
+  "outputDirectory": "dist",
   "installCommand": "npm install",
   "env": {
     "NEXT_PUBLIC_API_URL": "@dclaw_chat_api_url"

@@ -129,9 +129,23 @@ export function ChatContainer() {
 
   const handleSendMessage = useCallback(
     async (content: string) => {
-      if (!activeConversationId) {
-        handleNewConversation();
-        return;
+      // Create a new conversation inline if none is active, so the first message is never lost
+      let conversationId = activeConversationId;
+      if (!conversationId) {
+        const newId = Date.now().toString();
+        const newConversation: Conversation = {
+          id: newId,
+          title: content.substring(0, 40),
+          messages: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        setConversations((prev) => [newConversation, ...prev]);
+        setActiveConversationId(newId);
+        setIsSidebarOpen(false);
+        setCurrentPlan(undefined);
+        setActiveAgents([]);
+        conversationId = newId;
       }
 
       const userMessage: Message = {
@@ -143,7 +157,7 @@ export function ChatContainer() {
 
       setConversations((prev) =>
         prev.map((c) =>
-          c.id === activeConversationId
+          c.id === conversationId
             ? { ...c, messages: [...c.messages, userMessage], updatedAt: new Date() }
             : c
         )
@@ -153,14 +167,14 @@ export function ChatContainer() {
       setError(null);
 
       try {
-        const conversation = conversations.find((c) => c.id === activeConversationId);
-
-        // Build messages for backend API
-        // conversation.messages already includes the user message from state update above
-        const apiMessages = conversation?.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })) || [];
+        // Build messages for the backend: previous non-error messages + the current user message.
+        // We must build this explicitly because the setConversations call above is async and the
+        // conversations closure still holds the pre-update state.
+        const conversation = conversations.find((c) => c.id === conversationId);
+        const prevMessages = (conversation?.messages ?? [])
+          .filter((m) => m.status !== "error")
+          .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+        const apiMessages = [...prevMessages, { role: "user" as const, content }];
 
         // Generate swarm plan for UI visualization
         const lower = content.toLowerCase();
@@ -193,7 +207,7 @@ export function ChatContainer() {
         // Insert an empty assistant message placeholder
         setConversations((prev) =>
           prev.map((c) =>
-            c.id === activeConversationId
+            c.id === conversationId
               ? {
                   ...c,
                   messages: [
@@ -218,7 +232,7 @@ export function ChatContainer() {
 
         await chatStream(
           {
-            conversation_id: activeConversationId,
+            conversation_id: conversationId,
             messages: apiMessages,
             model: selectedModel,
             temperature: 0.7,
@@ -227,7 +241,7 @@ export function ChatContainer() {
             onToken: (token) => {
               setConversations((prev) =>
                 prev.map((c) =>
-                  c.id === activeConversationId
+                  c.id === conversationId
                     ? {
                         ...c,
                         messages: c.messages.map((m) =>
@@ -248,7 +262,7 @@ export function ChatContainer() {
               setError(errorText);
               setConversations((prev) =>
                 prev.map((c) =>
-                  c.id === activeConversationId
+                  c.id === conversationId
                     ? {
                         ...c,
                         messages: c.messages.map((m) =>
@@ -277,7 +291,7 @@ export function ChatContainer() {
         };
         setConversations((prev) =>
           prev.map((c) =>
-            c.id === activeConversationId
+            c.id === conversationId
               ? { ...c, messages: [...c.messages, errorMessage] }
               : c
           )
@@ -286,7 +300,7 @@ export function ChatContainer() {
         setIsLoading(false);
       }
     },
-    [activeConversationId, selectedModel, handleNewConversation, conversations]
+    [activeConversationId, selectedModel, conversations, availableModels]
   );
 
   return (
