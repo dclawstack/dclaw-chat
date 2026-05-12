@@ -288,3 +288,80 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
 }
+
+// ── Voice & Video Calls ────────────────────────────────────────────────────────
+
+export interface CallRoom {
+  id: string;
+  title: string;
+  host_id?: string;
+  channel_id?: string;
+  status: "waiting" | "active" | "ended";
+  max_participants: number;
+  recording_enabled: boolean;
+  created_at: string;
+  ended_at?: string;
+}
+
+export interface CallRoomCreate {
+  title?: string;
+  channel_id?: string;
+  max_participants?: number;
+  recording_enabled?: boolean;
+}
+
+export async function createCallRoom(req: CallRoomCreate = {}): Promise<CallRoom> {
+  const res = await fetch(`${API_BASE}/calls`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function listCallRooms(channelId?: string): Promise<CallRoom[]> {
+  const url = new URL(`${API_BASE}/calls`);
+  if (channelId) url.searchParams.set("channel_id", channelId);
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getCallRoom(roomId: string): Promise<CallRoom> {
+  const res = await fetch(`${API_BASE}/calls/${roomId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function endCallRoom(roomId: string): Promise<CallRoom> {
+  const res = await fetch(`${API_BASE}/calls/${roomId}/end`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteCallRoom(roomId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/calls/${roomId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+}
+
+export function buildSignalingUrl(roomId: string, userId: string): string {
+  const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
+    .replace(/^http/, "ws");
+  return `${wsBase}/calls/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
+}
