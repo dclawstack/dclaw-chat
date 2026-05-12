@@ -9,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, UploadFi
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func as sa_func
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.core.database import get_db, async_session
 from app.core.deps import get_current_user, CurrentUser
@@ -45,6 +45,16 @@ class ChannelMessageOut(BaseModel):
     attachments: Optional[list] = None
     created_at: datetime
     model_config = {"from_attributes": True}
+
+    @field_validator("attachments", mode="before")
+    @classmethod
+    def parse_attachments(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return None
+        return v
 
 
 class UnfurlRequest(BaseModel):
@@ -297,6 +307,7 @@ async def _generate_ai_reply(
     history: list[ChannelMessageORM],
     trigger_content: str,
     thread_parent_id: Optional[str] = None,
+    attachments: Optional[list] = None,
 ) -> None:
     """Call Ollama, persist + broadcast the AI reply (in thread if thread_parent_id given)."""
     try:
@@ -312,12 +323,21 @@ async def _generate_ai_reply(
             for m in history[-10:]
             if m.user_id != AI_USER_ID
         )
+
+        file_context = ""
+        for att in (attachments or []):
+            if att.get("type") in ("file", "image") and att.get("id") and att.get("name"):
+                text = file_service.extract_text(att["id"], att["name"], att.get("mime_type", ""))
+                if text:
+                    file_context += f"\n\n--- Attached file: {att['name']} ---\n{text}\n---"
+
         scope = "this thread" if thread_parent_id else "the team channel"
         system_prompt = (
             f"You are DClaw Copilot, an AI assistant embedded in {scope}. "
             "Answer the latest message concisely and helpfully. "
             "Keep replies under 3 sentences unless code or a list is needed.\n\n"
             f"--- Recent history ---\n{context}\n---"
+            + file_context
         )
         messages = [
             ChatMessage(role="system", content=system_prompt),
@@ -437,6 +457,7 @@ async def websocket_endpoint(
                     recent_history,
                     content,
                     thread_parent_id=data.get("thread_parent_id") or None,
+                    attachments=raw_attachments or None,
                 ))
 
             elif event == "typing_start":

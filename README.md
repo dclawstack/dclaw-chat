@@ -28,16 +28,16 @@
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Multi-Model Chat** | Switch between local (Ollama) and cloud (OpenRouter) LLMs |
-| **Persistent History** | All conversations stored in PostgreSQL |
-| **Voice Input** | Speech-to-text for hands-free chatting |
-| **Folder Organization** | Group conversations by project or topic |
-| **PII Shield** | Automatic scrubbing before cloud API calls |
-| **Dark Mode** | DKube design system with deep purple neutrals |
-| **Desktop App** | Tauri wrapper for native builds |
-| **JWT Auth** | Logto integration with RBAC |
+| Feature                 | Description                                               |
+| ----------------------- | --------------------------------------------------------- |
+| **Multi-Model Chat**    | Switch between local (Ollama) and cloud (OpenRouter) LLMs |
+| **Persistent History**  | All conversations stored in PostgreSQL                    |
+| **Voice Input**         | Speech-to-text for hands-free chatting                    |
+| **Folder Organization** | Group conversations by project or topic                   |
+| **PII Shield**          | Automatic scrubbing before cloud API calls                |
+| **Dark Mode**           | DKube design system with deep purple neutrals             |
+| **Desktop App**         | Tauri wrapper for native builds                           |
+| **JWT Auth**            | Logto integration with RBAC                               |
 
 ---
 

@@ -54,6 +54,28 @@ class FileService:
         p = UPLOAD_DIR / file_id / filename
         return p if p.exists() else None
 
+    def extract_text(self, file_id: str, filename: str, mime_type: str) -> str:
+        """Extract readable text from an uploaded file for AI context (max 8 000 chars)."""
+        path = self.file_path(file_id, filename)
+        if not path:
+            return ""
+
+        try:
+            if mime_type == "application/pdf" or filename.lower().endswith(".pdf"):
+                from pypdf import PdfReader
+                reader = PdfReader(str(path))
+                pages = [page.extract_text() or "" for page in reader.pages]
+                return "\n".join(pages)[:8_000]
+
+            if mime_type.startswith("text/") or filename.lower().endswith(
+                (".txt", ".md", ".csv", ".json", ".py", ".js", ".ts", ".html", ".xml")
+            ):
+                return path.read_text(errors="ignore")[:8_000]
+        except Exception:
+            pass
+
+        return ""
+
     async def unfurl(self, url: str) -> dict:
         base = {"type": "link", "url": url, "title": url, "description": "", "image": "", "favicon": ""}
         try:
