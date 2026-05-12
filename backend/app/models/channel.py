@@ -37,6 +37,7 @@ class ChannelMessageORM(Base):
     )
     reply_count: Mapped[int] = mapped_column(Integer, default=0)
     topic: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    attachments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     channel: Mapped["ChannelORM"] = relationship(back_populates="messages")

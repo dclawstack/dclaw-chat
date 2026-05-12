@@ -1,0 +1,96 @@
+import re
+import uuid
+import mimetypes
+from pathlib import Path
+from typing import Optional
+from urllib.parse import urlparse
+
+import httpx
+
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
+VIDEO_MIMES = {"video/mp4", "video/webm", "video/ogg"}
+
+_OG_RE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\'](?:og:|twitter:)?(\w+)["\'][^>]+content=["\']([^"\']*)["\']',
+    re.IGNORECASE,
+)
+_TITLE_RE = re.compile(r"<title[^>]*>([^<]+)</title>", re.IGNORECASE)
+_FAVICON_RE = re.compile(
+    r'<link[^>]+rel=["\'](?:shortcut )?icon["\'][^>]+href=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+_URL_RE = re.compile(r'https?://[^\s"\'<>]+', re.IGNORECASE)
+
+
+def extract_urls(text: str) -> list[str]:
+    return _URL_RE.findall(text)
+
+
+class FileService:
+    async def save_upload(self, file) -> dict:
+        file_id = str(uuid.uuid4())
+        original = file.filename or "upload"
+        safe_name = re.sub(r"[^\w.\-]", "_", original)
+        mime = file.content_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream"
+
+        dest_dir = UPLOAD_DIR / file_id
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        content = await file.read()
+        (dest_dir / safe_name).write_bytes(content)
+
+        return {
+            "type": "image" if mime in IMAGE_MIMES else ("video" if mime in VIDEO_MIMES else "file"),
+            "id": file_id,
+            "name": safe_name,
+            "mime_type": mime,
+            "size": len(content),
+            "url": f"/api/v1/messaging/files/{file_id}/{safe_name}",
+        }
+
+    def file_path(self, file_id: str, filename: str) -> Optional[Path]:
+        p = UPLOAD_DIR / file_id / filename
+        return p if p.exists() else None
+
+    async def unfurl(self, url: str) -> dict:
+        base = {"type": "link", "url": url, "title": url, "description": "", "image": "", "favicon": ""}
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "DClaw-Unfurler/1.0"})
+                if "text/html" not in resp.headers.get("content-type", ""):
+                    return base
+                html = resp.text[:60_000]
+        except Exception:
+            return base
+
+        og: dict[str, str] = {}
+        for m in _OG_RE.finditer(html):
+            k = m.group(1).lower()
+            if k not in og:
+                og[k] = m.group(2)
+
+        title_m = _TITLE_RE.search(html)
+        title = og.get("title") or (title_m.group(1).strip() if title_m else url)
+
+        favicon = ""
+        fav_m = _FAVICON_RE.search(html)
+        if fav_m:
+            fav = fav_m.group(1)
+            if fav.startswith("/"):
+                parsed = urlparse(url)
+                fav = f"{parsed.scheme}://{parsed.netloc}{fav}"
+            favicon = fav
+
+        return {
+            "type": "link",
+            "url": url,
+            "title": title,
+            "description": og.get("description", ""),
+            "image": og.get("image", ""),
+            "favicon": favicon,
+        }
+
+
+file_service = FileService()

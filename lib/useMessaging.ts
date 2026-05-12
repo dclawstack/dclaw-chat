@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ChannelMessage } from "@/types/chat";
+import { ChannelMessage, MessageAttachment } from "@/types/chat";
 
 const _apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
 const WS_BASE = _apiBase.replace(/^http/, "ws").replace(/\/api\/v1\/?$/, "/api/v1/messaging/ws");
@@ -69,10 +69,15 @@ export function useMessaging({ channelId, userId = "dev-user", userName = "You" 
   }, [channelId, connect]);
 
   const sendMessage = useCallback(
-    (content: string, threadParentId?: string) => {
+    (content: string, threadParentId?: string, attachments?: MessageAttachment[]) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
       wsRef.current.send(
-        JSON.stringify({ type: "message", content, thread_parent_id: threadParentId ?? null })
+        JSON.stringify({
+          type: "message",
+          content,
+          thread_parent_id: threadParentId ?? null,
+          attachments: attachments ?? [],
+        })
       );
       stopTyping();
     },

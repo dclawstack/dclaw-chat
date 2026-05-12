@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare } from "lucide-react";
 import { TypingIndicator } from "./TypingIndicator";
 import { TopicBadge } from "./TopicBadge";
+import { AttachmentList } from "./MessageAttachment";
 import { ThreadView } from "@/components/thread-view";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -48,6 +49,9 @@ function MessageItem({ message, isOwn, onReply, onTopicClick }: MessageItemProps
         <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
           {message.content}
         </p>
+        {message.attachments && message.attachments.length > 0 && (
+          <AttachmentList attachments={message.attachments} />
+        )}
         {message.reply_count > 0 && (
           <button
             onClick={() => onReply(message)}

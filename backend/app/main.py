@@ -16,9 +16,12 @@ async def lifespan(app: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Add topic column to existing channel_messages tables without dropping data
+        # Safe schema migrations for existing tables
         await conn.execute(text(
             "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS topic VARCHAR(50)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS attachments TEXT"
         ))
     yield
     # Shutdown

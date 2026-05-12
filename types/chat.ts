@@ -45,6 +45,26 @@ export interface Channel {
   created_at: string;
 }
 
+export interface FileAttachment {
+  type: "file" | "image" | "video";
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  url: string;
+}
+
+export interface LinkPreview {
+  type: "link";
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  favicon?: string;
+}
+
+export type MessageAttachment = FileAttachment | LinkPreview;
+
 export interface ChannelMessage {
   id: string;
   channel_id: string;
@@ -54,6 +74,7 @@ export interface ChannelMessage {
   thread_parent_id: string | null;
   reply_count: number;
   topic?: string | null;
+  attachments?: MessageAttachment[] | null;
   created_at: string;
 }
 

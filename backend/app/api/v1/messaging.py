@@ -1,10 +1,12 @@
 import uuid
+import json
 import asyncio
 import logging
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func as sa_func
 from pydantic import BaseModel
@@ -14,6 +16,7 @@ from app.core.deps import get_current_user, CurrentUser
 from app.models.channel import ChannelORM, ChannelMessageORM
 from app.services.messaging import manager
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
+from app.services.files import file_service, extract_urls
 from app.schemas.chat import Message as ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -39,8 +42,13 @@ class ChannelMessageOut(BaseModel):
     thread_parent_id: Optional[str]
     reply_count: int
     topic: Optional[str]
+    attachments: Optional[list] = None
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+class UnfurlRequest(BaseModel):
+    url: str
 
 
 class ChannelTopicOut(BaseModel):
@@ -56,6 +64,7 @@ class CreateChannelRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str
     thread_parent_id: Optional[str] = None
+    attachments: Optional[list] = None
 
 
 # ── Topic classification ──────────────────────────────────────────────────────
@@ -151,6 +160,7 @@ async def send_message(
         content=req.content,
         thread_parent_id=req.thread_parent_id,
         topic=_classify_topic(req.content),
+        attachments=json.dumps(req.attachments) if req.attachments else None,
     )
     db.add(msg)
     if req.thread_parent_id:
@@ -179,6 +189,31 @@ async def get_thread(
         .order_by(ChannelMessageORM.created_at.asc())
     )
     return list(result.scalars().all())
+
+
+@router.post("/channels/{channel_id}/upload")
+async def upload_file(
+    channel_id: str,
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+):
+    return await file_service.save_upload(file)
+
+
+@router.get("/files/{file_id}/{filename}")
+async def serve_file(file_id: str, filename: str):
+    path = file_service.file_path(file_id, filename)
+    if not path:
+        raise HTTPException(404, "File not found")
+    return FileResponse(path)
+
+
+@router.post("/unfurl")
+async def unfurl_url(
+    req: UnfurlRequest,
+    user: CurrentUser = Depends(get_current_user),
+):
+    return await file_service.unfurl(req.url)
 
 
 @router.get("/channels/{channel_id}/topics", response_model=List[ChannelTopicOut])
@@ -246,6 +281,7 @@ def _msg_to_dict(m: ChannelMessageORM) -> dict:
         "thread_parent_id": m.thread_parent_id,
         "reply_count": m.reply_count,
         "topic": m.topic,
+        "attachments": json.loads(m.attachments) if m.attachments else [],
         "created_at": m.created_at.isoformat(),
     }
 
@@ -360,6 +396,7 @@ async def websocket_endpoint(
                 if not content:
                     continue
 
+                raw_attachments = data.get("attachments") or []
                 async with async_session() as db:
                     msg = ChannelMessageORM(
                         id=str(uuid.uuid4()),
@@ -369,6 +406,7 @@ async def websocket_endpoint(
                         content=content,
                         thread_parent_id=data.get("thread_parent_id"),
                         topic=_classify_topic(content),
+                        attachments=json.dumps(raw_attachments) if raw_attachments else None,
                     )
                     db.add(msg)
                     if data.get("thread_parent_id"):
