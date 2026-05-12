@@ -1,6 +1,7 @@
 import pytest
 from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.message_repo import MessageRepository
+from app.repositories.call_repo import CallRoomRepository
 from app.schemas.conversation import ConversationCreate, ConversationUpdate
 
 
@@ -76,3 +77,45 @@ async def test_message_repo_list_by_conversation(db):
     await msg_repo.create(conv.id, "assistant", "Hello")
     msgs = await msg_repo.list_by_conversation(conv.id)
     assert len(msgs) == 2
+
+
+@pytest.mark.asyncio
+async def test_call_room_repo_create(db):
+    repo = CallRoomRepository(db)
+    room = await repo.create(title="Sprint Call", host_id="user-1")
+    assert room.title == "Sprint Call"
+    assert room.host_id == "user-1"
+    assert room.status == "waiting"
+    assert room.max_participants == 50
+
+
+@pytest.mark.asyncio
+async def test_call_room_repo_get_by_id(db):
+    repo = CallRoomRepository(db)
+    created = await repo.create(title="Find Me")
+    found = await repo.get_by_id(created.id)
+    assert found is not None
+    assert found.id == created.id
+
+
+@pytest.mark.asyncio
+async def test_call_room_repo_update_status(db):
+    repo = CallRoomRepository(db)
+    room = await repo.create(title="Status Test")
+    updated = await repo.update_status(room, "active")
+    assert updated.status == "active"
+    ended = await repo.update_status(updated, "ended")
+    assert ended.status == "ended"
+    assert ended.ended_at is not None
+
+
+@pytest.mark.asyncio
+async def test_call_room_repo_list_active_excludes_ended(db):
+    repo = CallRoomRepository(db)
+    active = await repo.create(title="Active")
+    ended = await repo.create(title="Ended")
+    await repo.update_status(ended, "ended")
+    rooms = await repo.list_active()
+    ids = [r.id for r in rooms]
+    assert active.id in ids
+    assert ended.id not in ids
