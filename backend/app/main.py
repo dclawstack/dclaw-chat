@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.core.database import engine, Base
 from app.core.config import get_settings
@@ -15,6 +16,10 @@ async def lifespan(app: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add topic column to existing channel_messages tables without dropping data
+        await conn.execute(text(
+            "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS topic VARCHAR(50)"
+        ))
     yield
     # Shutdown
     await engine.dispose()

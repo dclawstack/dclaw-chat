@@ -53,7 +53,13 @@ export interface ChannelMessage {
   content: string;
   thread_parent_id: string | null;
   reply_count: number;
+  topic?: string | null;
   created_at: string;
+}
+
+export interface ChannelTopic {
+  topic: string;
+  count: number;
 }
 
 export interface CopilotMessage {

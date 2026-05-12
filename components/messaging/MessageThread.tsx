@@ -1,23 +1,24 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
 import { ChannelMessage } from "@/types/chat";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MessageSquare, X, Send } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { TypingIndicator } from "./TypingIndicator";
+import { TopicBadge } from "./TopicBadge";
+import { ThreadView } from "@/components/thread-view";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface MessageItemProps {
   message: ChannelMessage;
   isOwn: boolean;
   onReply: (msg: ChannelMessage) => void;
+  onTopicClick?: (topic: string) => void;
 }
 
-function MessageItem({ message, isOwn, onReply }: MessageItemProps) {
+function MessageItem({ message, isOwn, onReply, onTopicClick }: MessageItemProps) {
   const time = new Date(message.created_at).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "numeric",
@@ -33,9 +34,16 @@ function MessageItem({ message, isOwn, onReply }: MessageItemProps) {
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
+        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
           <span className="text-sm font-semibold">{message.user_name}</span>
           <span className="text-xs text-muted-foreground">{time}</span>
+          {message.topic && (
+            <TopicBadge
+              topic={message.topic}
+              small
+              onClick={onTopicClick ? () => onTopicClick(message.topic!) : undefined}
+            />
+          )}
         </div>
         <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
           {message.content}
@@ -51,7 +59,6 @@ function MessageItem({ message, isOwn, onReply }: MessageItemProps) {
         )}
       </div>
 
-      {/* Reply button on hover */}
       <button
         onClick={() => onReply(message)}
         className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity shrink-0 self-start mt-1"
@@ -63,79 +70,14 @@ function MessageItem({ message, isOwn, onReply }: MessageItemProps) {
   );
 }
 
-interface ThreadPanelProps {
-  parent: ChannelMessage;
-  replies: ChannelMessage[];
-  onClose: () => void;
-  onSendReply: (content: string) => void;
-  userId: string;
-}
-
-function ThreadPanel({ parent, replies, onClose, onSendReply, userId }: ThreadPanelProps) {
-  const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [replies]);
-
-  const handleSend = () => {
-    if (!input.trim()) return;
-    onSendReply(input.trim());
-    setInput("");
-  };
-
-  return (
-    <div className="w-80 border-l flex flex-col bg-background shrink-0">
-      <div className="h-14 border-b flex items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-dclaw-500" />
-          <span className="text-sm font-semibold">Thread</span>
-        </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <ScrollArea className="flex-1">
-        {/* Parent message */}
-        <div className="px-4 py-3 border-b bg-muted/20">
-          <p className="text-xs text-muted-foreground mb-1">{parent.user_name}</p>
-          <p className="text-sm whitespace-pre-wrap">{parent.content}</p>
-        </div>
-        <p className="text-xs text-muted-foreground px-4 py-2">
-          {replies.length} {replies.length === 1 ? "reply" : "replies"}
-        </p>
-        {replies.map((r) => (
-          <MessageItem key={r.id} message={r} isOwn={r.user_id === userId} onReply={() => {}} />
-        ))}
-        <div ref={bottomRef} />
-      </ScrollArea>
-
-      <div className="border-t px-3 py-3">
-        <div className="flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="Reply in thread…"
-            className="text-sm h-9"
-          />
-          <Button size="icon" className="h-9 w-9 shrink-0" disabled={!input.trim()} onClick={handleSend}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 interface MessageThreadProps {
   messages: ChannelMessage[];
   typingUsers: string[];
   userId: string;
   channelId: string;
   onSendReply: (content: string, parentId: string) => void;
+  topicFilter?: string | null;
+  onTopicClick?: (topic: string) => void;
   isLoading?: boolean;
 }
 
@@ -145,6 +87,8 @@ export function MessageThread({
   userId,
   channelId,
   onSendReply,
+  topicFilter,
+  onTopicClick,
   isLoading,
 }: MessageThreadProps) {
   const [threadParent, setThreadParent] = useState<ChannelMessage | null>(null);
@@ -161,13 +105,15 @@ export function MessageThread({
       setFetchedReplies([]);
       return;
     }
-    fetch(`${API_BASE}/messaging/channels/${channelId}/messages/${threadParent.id}/thread`)
+    fetch(
+      `${API_BASE}/messaging/channels/${channelId}/messages/${threadParent.id}/thread`
+    )
       .then((r) => r.json())
       .then((data: ChannelMessage[]) => setFetchedReplies(data))
       .catch(() => setFetchedReplies([]));
   }, [threadParent?.id, channelId]);
 
-  // Merge fetched historical replies with live WS replies, deduplicated
+  // Merge historical + live replies, deduped and sorted
   const liveReplies = threadParent
     ? messages.filter((m) => m.thread_parent_id === threadParent.id)
     : [];
@@ -175,7 +121,16 @@ export function MessageThread({
   const threadReplies = [
     ...fetchedReplies.filter((m) => !seenIds.has(m.id)),
     ...liveReplies,
-  ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  ].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  // Apply topic filter to root messages only
+  const rootMessages = messages.filter(
+    (m) =>
+      !m.thread_parent_id &&
+      (!topicFilter || m.topic === topicFilter)
+  );
 
   if (messages.length === 0 && !isLoading) {
     return (
@@ -187,7 +142,13 @@ export function MessageThread({
     );
   }
 
-  const rootMessages = messages.filter((m) => !m.thread_parent_id);
+  if (topicFilter && rootMessages.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
+        <p className="text-sm">No messages tagged <strong>{topicFilter}</strong></p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 min-h-0">
@@ -200,6 +161,7 @@ export function MessageThread({
                 message={msg}
                 isOwn={msg.user_id === userId}
                 onReply={setThreadParent}
+                onTopicClick={onTopicClick}
               />
             ))}
             <div ref={bottomRef} />
@@ -209,9 +171,10 @@ export function MessageThread({
       </div>
 
       {threadParent && (
-        <ThreadPanel
+        <ThreadView
           parent={threadParent}
           replies={threadReplies}
+          channelId={channelId}
           onClose={() => setThreadParent(null)}
           onSendReply={(content) => onSendReply(content, threadParent.id)}
           userId={userId}

@@ -6,7 +6,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func as sa_func
 from pydantic import BaseModel
 
 from app.core.database import get_db, async_session
@@ -38,8 +38,14 @@ class ChannelMessageOut(BaseModel):
     content: str
     thread_parent_id: Optional[str]
     reply_count: int
+    topic: Optional[str]
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+class ChannelTopicOut(BaseModel):
+    topic: str
+    count: int
 
 
 class CreateChannelRequest(BaseModel):
@@ -50,6 +56,28 @@ class CreateChannelRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str
     thread_parent_id: Optional[str] = None
+
+
+# ── Topic classification ──────────────────────────────────────────────────────
+
+_TOPIC_KEYWORDS: dict[str, list[str]] = {
+    "frontend": ["react", "css", "html", "ui", "component", "tsx", "jsx", "tailwind", "next", "style", "button", "layout", "page"],
+    "backend": ["api", "server", "endpoint", "database", "sql", "orm", "fastapi", "flask", "python", "route", "schema", "query"],
+    "devops": ["docker", "kubernetes", "k8s", "ci", "cd", "deploy", "github", "pipeline", "helm", "nginx", "aws", "gcp", "build"],
+    "design": ["design", "ux", "figma", "wireframe", "prototype", "color", "font", "typography", "mockup", "spacing", "icon"],
+    "bug": ["bug", "fix", "error", "crash", "issue", "broken", "fail", "wrong", "exception", "traceback", "null", "undefined", "not working"],
+    "feature": ["feature", "add", "implement", "build", "create", "new", "enhance", "improve", "upgrade", "support"],
+    "question": ["?", "how", "why", "what", "where", "when", "who", "anyone", "help", "can someone", "does anyone"],
+}
+
+def _classify_topic(content: str) -> str:
+    lower = content.lower()
+    scores = {
+        topic: sum(1 for kw in kws if kw in lower)
+        for topic, kws in _TOPIC_KEYWORDS.items()
+    }
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else "general"
 
 
 # ── REST endpoints ────────────────────────────────────────────────────────────
@@ -122,6 +150,7 @@ async def send_message(
         user_name=user.email.split("@")[0],
         content=req.content,
         thread_parent_id=req.thread_parent_id,
+        topic=_classify_topic(req.content),
     )
     db.add(msg)
     if req.thread_parent_id:
@@ -152,7 +181,59 @@ async def get_thread(
     return list(result.scalars().all())
 
 
-# ── WebSocket ─────────────────────────────────────────────────────────────────
+@router.get("/channels/{channel_id}/topics", response_model=List[ChannelTopicOut])
+async def get_channel_topics(
+    channel_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(ChannelMessageORM.topic, sa_func.count(ChannelMessageORM.id).label("count"))
+        .where(
+            ChannelMessageORM.channel_id == channel_id,
+            ChannelMessageORM.topic.isnot(None),
+            ChannelMessageORM.thread_parent_id.is_(None),
+        )
+        .group_by(ChannelMessageORM.topic)
+        .order_by(sa_func.count(ChannelMessageORM.id).desc())
+    )
+    return [{"topic": row.topic, "count": row.count} for row in result.all()]
+
+
+@router.get("/channels/{channel_id}/topics/{topic}/summary")
+async def get_topic_summary(
+    channel_id: str,
+    topic: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(ChannelMessageORM)
+        .where(
+            ChannelMessageORM.channel_id == channel_id,
+            ChannelMessageORM.topic == topic,
+        )
+        .order_by(ChannelMessageORM.created_at.asc())
+        .limit(20)
+    )
+    msgs = list(result.scalars().all())
+    if not msgs:
+        return {"topic": topic, "message_count": 0, "summary": "No messages found for this topic."}
+
+    transcript = "\n".join(f"{m.user_name}: {m.content[:200]}" for m in msgs)
+    prompt_messages = [
+        ChatMessage(role="system", content=(
+            f"Summarize the following team conversation about '{topic}' in 3-5 concise bullet points. "
+            "Focus on decisions made, problems raised, and next steps. "
+            "Start each bullet with '•'."
+        )),
+        ChatMessage(role="user", content=transcript),
+    ]
+    summary = await _ollama.chat(_default_model, prompt_messages, temperature=0.3)
+    return {"topic": topic, "message_count": len(msgs), "summary": summary.strip()}
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _msg_to_dict(m: ChannelMessageORM) -> dict:
     return {
@@ -164,6 +245,7 @@ def _msg_to_dict(m: ChannelMessageORM) -> dict:
         "content": m.content,
         "thread_parent_id": m.thread_parent_id,
         "reply_count": m.reply_count,
+        "topic": m.topic,
         "created_at": m.created_at.isoformat(),
     }
 
@@ -215,6 +297,7 @@ async def _generate_ai_reply(
                 user_name=AI_USER_NAME,
                 content=reply_text.strip(),
                 thread_parent_id=thread_parent_id,
+                topic=_classify_topic(reply_text),
             )
             db.add(ai_msg)
             if thread_parent_id:
@@ -235,6 +318,8 @@ async def _generate_ai_reply(
         logger.error(f"AI reply failed for channel {channel_id}: {e}")
         manager.clear_typing(channel_id, AI_USER_ID)
 
+
+# ── WebSocket ─────────────────────────────────────────────────────────────────
 
 @router.websocket("/ws/{channel_id}")
 async def websocket_endpoint(
@@ -283,6 +368,7 @@ async def websocket_endpoint(
                         user_name=user_name,
                         content=content,
                         thread_parent_id=data.get("thread_parent_id"),
+                        topic=_classify_topic(content),
                     )
                     db.add(msg)
                     if data.get("thread_parent_id"):
@@ -291,7 +377,6 @@ async def websocket_endpoint(
                             parent.reply_count += 1
                     await db.commit()
                     await db.refresh(msg)
-                    # Capture history for AI context while session is open
                     hist_result = await db.execute(
                         select(ChannelMessageORM)
                         .where(ChannelMessageORM.channel_id == channel_id)
@@ -300,10 +385,8 @@ async def websocket_endpoint(
                     )
                     recent_history = list(hist_result.scalars().all())
 
-                # Broadcast user message to all subscribers (sender included via subscription)
                 await manager.broadcast(channel_id, _msg_to_dict(msg))
 
-                # Clear typing
                 manager.clear_typing(channel_id, user_id)
                 await manager.broadcast(channel_id, {
                     "type": "typing",
@@ -311,7 +394,6 @@ async def websocket_endpoint(
                     "typing_users": manager.get_typing_names(channel_id),
                 })
 
-                # AI reply runs in background so it doesn't block the WS loop
                 asyncio.create_task(_generate_ai_reply(
                     channel_id,
                     recent_history,

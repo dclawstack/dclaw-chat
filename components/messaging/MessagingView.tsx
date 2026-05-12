@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Channel } from "@/types/chat";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Channel, ChannelTopic } from "@/types/chat";
 import { useMessaging } from "@/lib/useMessaging";
 import { MessageThread } from "./MessageThread";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Hash, Plus, Send, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { TopicBadge } from "./TopicBadge";
+import { Hash, Plus, Send, Wifi, WifiOff, Loader2, Tag, X } from "lucide-react";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
@@ -83,16 +84,81 @@ function ChannelList({ channels, activeId, onSelect, onAdd }: ChannelListProps) 
   );
 }
 
+interface TopicsPanelProps {
+  topics: ChannelTopic[];
+  activeTopic: string | null;
+  onSelect: (topic: string | null) => void;
+}
+
+function TopicsPanel({ topics, activeTopic, onSelect }: TopicsPanelProps) {
+  if (topics.length === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center justify-between px-3 py-1">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+          <Tag className="h-3 w-3" />
+          Topics
+        </span>
+        {activeTopic && (
+          <button
+            onClick={() => onSelect(null)}
+            className="text-muted-foreground hover:text-foreground"
+            title="Clear filter"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="px-3 py-1 flex flex-col gap-1">
+        {topics.map(({ topic, count }) => (
+          <button
+            key={topic}
+            onClick={() => onSelect(activeTopic === topic ? null : topic)}
+            className={`flex items-center justify-between w-full px-2 py-1 rounded-md text-xs transition-colors ${
+              activeTopic === topic
+                ? "bg-accent"
+                : "hover:bg-accent/50"
+            }`}
+          >
+            <TopicBadge topic={topic} small />
+            <span className="text-muted-foreground">{count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function MessagingView() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loadingChannels, setLoadingChannels] = useState(true);
+  const [activeTopic, setActiveTopic] = useState<string | null>(null);
 
   const activeChannel = channels.find((c) => c.id === activeChannelId);
 
   const { messages, typingUsers, connected, sendMessage, startTyping, stopTyping } =
     useMessaging({ channelId: activeChannelId, userId: USER_ID, userName: USER_NAME });
+
+  // Derive topics from current messages (always in sync, no extra fetch)
+  const topics = useMemo<ChannelTopic[]>(() => {
+    const counts: Record<string, number> = {};
+    for (const m of messages) {
+      if (m.topic && !m.thread_parent_id) {
+        counts[m.topic] = (counts[m.topic] ?? 0) + 1;
+      }
+    }
+    return Object.entries(counts)
+      .map(([topic, count]) => ({ topic, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [messages]);
+
+  // Clear topic filter when channel changes
+  useEffect(() => {
+    setActiveTopic(null);
+  }, [activeChannelId]);
 
   // Load channels from backend
   useEffect(() => {
@@ -141,7 +207,7 @@ export function MessagingView() {
 
   return (
     <div className="flex h-full">
-      {/* Channel sidebar */}
+      {/* Sidebar */}
       <aside className="w-56 border-r flex flex-col bg-card shrink-0">
         <div className="p-3 border-b">
           <p className="text-xs font-semibold text-muted-foreground">WORKSPACE</p>
@@ -152,25 +218,44 @@ export function MessagingView() {
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <ChannelList
-              channels={channels}
-              activeId={activeChannelId}
-              onSelect={setActiveChannelId}
-              onAdd={handleAddChannel}
-            />
+            <>
+              <ChannelList
+                channels={channels}
+                activeId={activeChannelId}
+                onSelect={setActiveChannelId}
+                onAdd={handleAddChannel}
+              />
+              <TopicsPanel
+                topics={topics}
+                activeTopic={activeTopic}
+                onSelect={setActiveTopic}
+              />
+            </>
           )}
         </ScrollArea>
       </aside>
 
-      {/* Main channel area */}
+      {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Channel header */}
+        {/* Header */}
         <header className="h-14 border-b flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-2">
             {activeChannel && (
               <>
                 <Hash className="h-4 w-4 text-muted-foreground" />
                 <span className="font-semibold text-sm">{activeChannel.name}</span>
+                {activeTopic && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground">·</span>
+                    <TopicBadge topic={activeTopic} />
+                    <button
+                      onClick={() => setActiveTopic(null)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
               </>
             )}
             {!activeChannel && (
@@ -187,7 +272,6 @@ export function MessagingView() {
           </div>
         </header>
 
-        {/* Messages + threads */}
         {activeChannelId ? (
           <>
             <MessageThread
@@ -196,6 +280,8 @@ export function MessagingView() {
               userId={USER_ID}
               channelId={activeChannelId}
               onSendReply={handleSendReply}
+              topicFilter={activeTopic}
+              onTopicClick={setActiveTopic}
             />
 
             {/* Input bar */}
@@ -206,7 +292,11 @@ export function MessagingView() {
                   onChange={(e) => handleInputChange(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                   onBlur={stopTyping}
-                  placeholder={`Message #${activeChannel?.name ?? "..."}`}
+                  placeholder={
+                    activeTopic
+                      ? `Message #${activeChannel?.name} · ${activeTopic}`
+                      : `Message #${activeChannel?.name ?? "..."}`
+                  }
                   className="text-sm"
                 />
                 <Button
