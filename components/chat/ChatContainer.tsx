@@ -7,9 +7,11 @@ import { ChatInput } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import { ModelSelector } from "./ModelSelector";
 import { SwarmStatus } from "@/components/swarm/SwarmStatus";
+import { ChatCopilot } from "@/components/chat-copilot";
+import { MessagingView } from "@/components/messaging/MessagingView";
 import { chatStream, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Menu, Shield } from "lucide-react";
+import { Menu, Shield, MessageSquare, Bot } from "lucide-react";
 
 // Demo data
 const demoConversations: Conversation[] = [
@@ -67,6 +69,7 @@ export function ChatContainer() {
   const [selectedModel, setSelectedModel] = useState("gemma-4b");
   const [availableModels, setAvailableModels] = useState<AIModel[]>(MODELS);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"ai" | "channels">("ai");
   const [activeAgents, setActiveAgents] = useState<string[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{
     intent: string;
@@ -290,7 +293,39 @@ export function ChatContainer() {
   );
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background flex-col">
+      {/* Top tab bar */}
+      <div className="flex items-center gap-1 border-b px-4 h-10 shrink-0 bg-card">
+        <button
+          onClick={() => setActiveTab("ai")}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-colors ${
+            activeTab === "ai"
+              ? "bg-dclaw-500 text-white font-medium"
+              : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          <Bot className="h-3.5 w-3.5" />
+          AI Chat
+        </button>
+        <button
+          onClick={() => setActiveTab("channels")}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-colors ${
+            activeTab === "channels"
+              ? "bg-dclaw-500 text-white font-medium"
+              : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Channels
+        </button>
+      </div>
+
+      {activeTab === "channels" ? (
+        <div className="flex-1 min-h-0">
+          <MessagingView />
+        </div>
+      ) : (
+    <div className="flex flex-1 min-h-0 bg-background">
       <Sidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -340,6 +375,11 @@ export function ChatContainer() {
               onSelect={setSelectedModel}
               models={availableModels}
             />
+            <ChatCopilot
+              conversationId={activeConversationId}
+              selectedModel={selectedModel}
+              conversationMessages={activeConversation?.messages}
+            />
           </div>
         </header>
 
@@ -372,6 +412,8 @@ export function ChatContainer() {
           disabled={!activeConversationId}
         />
       </div>
+    </div>
+    )}
     </div>
   );
 }

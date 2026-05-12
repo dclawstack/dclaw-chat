@@ -119,3 +119,80 @@ export async function listModels(): Promise<ModelInfo[]> {
   }
   return res.json();
 }
+
+export interface CopilotChatRequest {
+  query: string;
+  conversation_id?: string;
+  model?: string;
+  include_context?: boolean;
+}
+
+export interface CopilotChatResponse {
+  answer: string;
+  model: string;
+  rag_chunks_used: number;
+  context_snippets: string[];
+}
+
+export interface SummarizeResponse {
+  conversation_id: string;
+  summary: string;
+  message_count: number;
+}
+
+export interface ActionsResponse {
+  conversation_id: string;
+  actions: Array<{
+    text: string;
+    priority: "low" | "medium" | "high";
+    assignee?: string;
+    status: "open" | "done";
+  }>;
+}
+
+export async function copilotChat(req: CopilotChatRequest): Promise<CopilotChatResponse> {
+  const res = await fetch(`${API_BASE}/ai/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function summarizeConversation(
+  conversationId: string,
+  messages: ApiMessage[],
+  model?: string
+): Promise<SummarizeResponse> {
+  const res = await fetch(`${API_BASE}/ai/summarize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversation_id: conversationId, messages, model }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function extractActions(
+  conversationId: string,
+  messages: ApiMessage[],
+  model?: string
+): Promise<ActionsResponse> {
+  const res = await fetch(`${API_BASE}/ai/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversation_id: conversationId, messages, model }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}

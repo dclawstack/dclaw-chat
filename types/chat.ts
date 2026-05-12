@@ -25,6 +25,45 @@ export interface AIModel {
   available?: boolean;
 }
 
+export interface ConversationSummary {
+  conversationId: string;
+  summary: string;
+  messageCount: number;
+}
+
+export interface ExtractedAction {
+  text: string;
+  priority: "low" | "medium" | "high";
+  assignee?: string;
+  status: "open" | "done";
+}
+
+export interface Channel {
+  id: string;
+  name: string;
+  type: "public" | "dm" | "group";
+  created_at: string;
+}
+
+export interface ChannelMessage {
+  id: string;
+  channel_id: string;
+  user_id: string;
+  user_name: string;
+  content: string;
+  thread_parent_id: string | null;
+  reply_count: number;
+  created_at: string;
+}
+
+export interface CopilotMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  ragChunksUsed?: number;
+}
+
 export interface ChatState {
   conversations: Conversation[];
   activeConversationId: string | null;
