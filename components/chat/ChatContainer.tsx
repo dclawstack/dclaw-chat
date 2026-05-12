@@ -9,9 +9,10 @@ import { ModelSelector } from "./ModelSelector";
 import { SwarmStatus } from "@/components/swarm/SwarmStatus";
 import { ChatCopilot } from "@/components/chat-copilot";
 import { MessagingView } from "@/components/messaging/MessagingView";
+import { BotMarketplace } from "@/components/bots/BotMarketplace";
 import { chatStream, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Menu, Shield, MessageSquare, Bot } from "lucide-react";
+import { Menu, Shield, MessageSquare, Bot, Package } from "lucide-react";
 
 // Demo data
 const demoConversations: Conversation[] = [
@@ -69,7 +70,7 @@ export function ChatContainer() {
   const [selectedModel, setSelectedModel] = useState("gemma-4b");
   const [availableModels, setAvailableModels] = useState<AIModel[]>(MODELS);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"ai" | "channels">("ai");
+  const [activeTab, setActiveTab] = useState<"ai" | "channels" | "bots">("ai");
   const [activeAgents, setActiveAgents] = useState<string[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{
     intent: string;
@@ -318,11 +319,26 @@ export function ChatContainer() {
           <MessageSquare className="h-3.5 w-3.5" />
           Channels
         </button>
+        <button
+          onClick={() => setActiveTab("bots")}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-colors ${
+            activeTab === "bots"
+              ? "bg-dclaw-500 text-white font-medium"
+              : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          <Package className="h-3.5 w-3.5" />
+          Bots
+        </button>
       </div>
 
       {activeTab === "channels" ? (
         <div className="flex-1 min-h-0">
           <MessagingView />
+        </div>
+      ) : activeTab === "bots" ? (
+        <div className="flex-1 min-h-0">
+          <BotMarketplace />
         </div>
       ) : (
     <div className="flex flex-1 min-h-0 bg-background">

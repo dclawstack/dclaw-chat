@@ -14,9 +14,11 @@ from pydantic import BaseModel, field_validator
 from app.core.database import get_db, async_session
 from app.core.deps import get_current_user, CurrentUser
 from app.models.channel import ChannelORM, ChannelMessageORM
+from app.models.bot import BotORM
 from app.services.messaging import manager
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
 from app.services.files import file_service, extract_urls
+from app.services.command_parser import parse_command, execute_command
 from app.schemas.chat import Message as ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -302,6 +304,68 @@ _ollama = OllamaService()
 _default_model = next(iter(OLLAMA_MODELS.keys()), "gemma-4b")
 
 
+async def _dispatch_command(
+    content: str,
+    channel_id: str,
+    user_id: str,
+    user_name: str,
+) -> bool:
+    """If content is a slash command, execute it, post bot reply, return True."""
+    cmd = parse_command(content)
+    if not cmd:
+        return False
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(BotORM).where(BotORM.installed == True, BotORM.enabled == True)  # noqa: E712
+        )
+        bots = list(result.scalars().all())
+
+    matched_bot: Optional[BotORM] = None
+    for bot in bots:
+        if not bot.commands:
+            continue
+        try:
+            cmds = json.loads(bot.commands)
+        except Exception:
+            continue
+        if any(c.get("name") == cmd.name for c in cmds):
+            matched_bot = bot
+            break
+
+    if not matched_bot:
+        reply_text = f"Unknown command `/{cmd.name}`. Type `/help` to see available commands."
+        bot_display = "🤖 Bot"
+        bot_user_id = "bot-system"
+    else:
+        reply_text = await execute_command(
+            command=cmd,
+            bot_commands_json=matched_bot.commands,
+            webhook_url=matched_bot.webhook_url,
+            channel_id=channel_id,
+            user_id=user_id,
+            user_name=user_name,
+        )
+        bot_display = f"{matched_bot.avatar_emoji or '🤖'} {matched_bot.name}"
+        bot_user_id = f"bot-{matched_bot.slug}"
+
+    async with async_session() as db:
+        bot_msg = ChannelMessageORM(
+            id=str(uuid.uuid4()),
+            channel_id=channel_id,
+            user_id=bot_user_id,
+            user_name=bot_display,
+            content=reply_text,
+            topic=_classify_topic(reply_text),
+        )
+        db.add(bot_msg)
+        await db.commit()
+        await db.refresh(bot_msg)
+
+    await manager.broadcast(channel_id, _msg_to_dict(bot_msg))
+    return True
+
+
 async def _generate_ai_reply(
     channel_id: str,
     history: list[ChannelMessageORM],
@@ -452,13 +516,18 @@ async def websocket_endpoint(
                     "typing_users": manager.get_typing_names(channel_id),
                 })
 
-                asyncio.create_task(_generate_ai_reply(
-                    channel_id,
-                    recent_history,
-                    content,
-                    thread_parent_id=data.get("thread_parent_id") or None,
-                    attachments=raw_attachments or None,
-                ))
+                if content.startswith("/"):
+                    asyncio.create_task(_dispatch_command(
+                        content, channel_id, user_id, user_name
+                    ))
+                else:
+                    asyncio.create_task(_generate_ai_reply(
+                        channel_id,
+                        recent_history,
+                        content,
+                        thread_parent_id=data.get("thread_parent_id") or None,
+                        attachments=raw_attachments or None,
+                    ))
 
             elif event == "typing_start":
                 manager.set_typing(channel_id, user_id, user_name)

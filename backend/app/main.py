@@ -23,6 +23,13 @@ async def lifespan(app: FastAPI):
         await conn.execute(text(
             "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS attachments TEXT"
         ))
+        # bots table columns added in v1.3
+        try:
+            await conn.execute(text(
+                "ALTER TABLE bots ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR(10)"
+            ))
+        except Exception:
+            pass
     yield
     # Shutdown
     await engine.dispose()

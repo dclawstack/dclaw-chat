@@ -101,6 +101,33 @@ export interface ChatState {
   isVoiceMode: boolean;
 }
 
+export interface CommandParam {
+  name: string;
+  description: string;
+  required: boolean;
+}
+
+export interface BotCommand {
+  name: string;
+  description: string;
+  usage: string;
+  params: CommandParam[];
+}
+
+export interface Bot {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  avatar_emoji: string | null;
+  webhook_url: string | null;
+  commands: BotCommand[];
+  category: string;
+  installed: boolean;
+  enabled: boolean;
+  created_at: string;
+}
+
 // Fallback models used when backend is unreachable
 export const MODELS: AIModel[] = [
   {
