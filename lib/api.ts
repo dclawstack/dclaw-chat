@@ -196,3 +196,95 @@ export async function extractActions(
   }
   return res.json();
 }
+
+// ── Meeting Summaries ─────────────────────────────────────────────────────────
+
+export interface MeetingActionItem {
+  text: string;
+  priority: "low" | "medium" | "high";
+  assignee?: string;
+  status: "open" | "done";
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  file_id?: string;
+  filename?: string;
+  mime_type?: string;
+  duration_seconds?: number;
+  status: "pending" | "transcribing" | "summarizing" | "done" | "failed";
+  transcript?: string;
+  summary?: string;
+  action_items?: MeetingActionItem[];
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createMeeting(title: string): Promise<Meeting> {
+  const res = await fetch(`${API_BASE}/meetings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function uploadMeeting(file: File, title?: string): Promise<Meeting> {
+  const form = new FormData();
+  form.append("file", file);
+  if (title) form.append("title", title);
+  const res = await fetch(`${API_BASE}/meetings/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function processMeeting(meetingId: string, model?: string): Promise<Meeting> {
+  const res = await fetch(`${API_BASE}/meetings/${meetingId}/process`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: model ?? "gemma-4b" }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function listMeetings(): Promise<Meeting[]> {
+  const res = await fetch(`${API_BASE}/meetings`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getMeeting(meetingId: string): Promise<Meeting> {
+  const res = await fetch(`${API_BASE}/meetings/${meetingId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteMeeting(meetingId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/meetings/${meetingId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+}

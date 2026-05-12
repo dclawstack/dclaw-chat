@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_URL: str = "https://openrouter.ai/api/v1"
     NVIDIA_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    WHISPER_API_URL: str = "https://api.openai.com/v1"
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3002,http://localhost:1420"
