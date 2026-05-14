@@ -365,3 +365,121 @@ export function buildSignalingUrl(roomId: string, userId: string): string {
     .replace(/^http/, "ws");
   return `${wsBase}/calls/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
 }
+
+// ── Huddles ───────────────────────────────────────────────────────────────────
+
+export interface HuddleParticipant {
+  id: string;
+  room_id: string;
+  user_id: string;
+  display_name: string;
+  is_speaking: boolean;
+  is_muted: boolean;
+  joined_at: string;
+  last_seen_at: string;
+}
+
+export interface HuddleRoom {
+  id: string;
+  name: string;
+  created_by?: string;
+  status: "active" | "closed";
+  created_at: string;
+  closed_at?: string;
+  participants: HuddleParticipant[];
+}
+
+export async function createHuddle(name: string = "Huddle"): Promise<HuddleRoom> {
+  const res = await fetch(`${API_BASE}/huddles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function listHuddles(): Promise<HuddleRoom[]> {
+  const res = await fetch(`${API_BASE}/huddles`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getHuddle(roomId: string): Promise<HuddleRoom> {
+  const res = await fetch(`${API_BASE}/huddles/${roomId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function joinHuddle(
+  roomId: string,
+  displayName: string = "Anonymous"
+): Promise<HuddleParticipant> {
+  const res = await fetch(`${API_BASE}/huddles/${roomId}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function leaveHuddle(roomId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/huddles/${roomId}/leave`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+}
+
+export async function updateHuddleSpeaking(
+  roomId: string,
+  isSpeaking: boolean,
+  isMuted?: boolean
+): Promise<HuddleParticipant> {
+  const res = await fetch(`${API_BASE}/huddles/${roomId}/speaking`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_speaking: isSpeaking, is_muted: isMuted }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function closeHuddle(roomId: string): Promise<HuddleRoom> {
+  const res = await fetch(`${API_BASE}/huddles/${roomId}/close`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteHuddle(roomId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/huddles/${roomId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+}
+
+export function buildHuddleWsUrl(roomId: string, userId: string): string {
+  const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
+    .replace(/^http/, "ws");
+  return `${wsBase}/huddles/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
+}

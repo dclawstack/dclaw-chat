@@ -9,6 +9,7 @@ from app.api.v1.messaging import router as messaging_router
 from app.api.v1.meetings import router as meetings_router
 from app.api.v1.bots import router as bots_router
 from app.api.v1.calls import router as calls_router
+from app.api.v1.huddles import router as huddles_router
 
 api_router = APIRouter()
 api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
@@ -20,3 +21,4 @@ api_router.include_router(messaging_router, prefix="/messaging", tags=["messagin
 api_router.include_router(meetings_router, prefix="/meetings", tags=["meetings"])
 api_router.include_router(bots_router, prefix="/bots", tags=["bots"])
 api_router.include_router(calls_router, prefix="/calls", tags=["calls"])
+api_router.include_router(huddles_router, prefix="/huddles", tags=["huddles"])
