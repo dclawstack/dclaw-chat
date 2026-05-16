@@ -5,5 +5,15 @@
   "installCommand": "npm install",
   "env": {
     "NEXT_PUBLIC_API_URL": "@dclaw_chat_api_url"
+  },
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "framework": "nextjs"
+    },
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/_/backend"
+    }
   }
 }

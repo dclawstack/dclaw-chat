@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Set
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_db, async_session
 from app.core.deps import get_current_user, CurrentUser
 from app.repositories.call_repo import CallRoomRepository
 from app.schemas.call import CallRoomCreate, CallRoomOut
@@ -103,7 +103,9 @@ async def list_call_rooms(
     user: CurrentUser = Depends(get_current_user),
 ):
     repo = CallRoomRepository(db)
-    return await repo.list_active(channel_id=channel_id)
+    rooms = await repo.list_active(channel_id=channel_id)
+    # Only surface rooms that have at least one live WebSocket participant
+    return [r for r in rooms if _signaling.participant_count(r.id) > 0]
 
 
 @router.get("/{room_id}", response_model=CallRoomOut)
@@ -198,3 +200,10 @@ async def call_signaling(
         pass
     finally:
         await _signaling.disconnect(room_id, user_id)
+        # Auto-end the room in the DB when the last participant disconnects
+        if _signaling.participant_count(room_id) == 0:
+            async with async_session() as auto_db:
+                auto_repo = CallRoomRepository(auto_db)
+                auto_room = await auto_repo.get_by_id(room_id)
+                if auto_room and auto_room.status != "ended":
+                    await auto_repo.update_status(auto_room, "ended")

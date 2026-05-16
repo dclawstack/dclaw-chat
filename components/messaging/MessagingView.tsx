@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TopicBadge } from "./TopicBadge";
-import { Hash, Plus, Send, Wifi, WifiOff, Loader2, Tag, X, Paperclip, Images } from "lucide-react";
+import { Hash, Plus, Send, Wifi, WifiOff, Loader2, Tag, X, Paperclip, Images, Trash2 } from "lucide-react";
+import { StartCallButton } from "@/components/calls/StartCallButton";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
 const USER_ID = "dev-user";
@@ -22,9 +23,10 @@ interface ChannelListProps {
   activeId: string | null;
   onSelect: (id: string) => void;
   onAdd: (name: string) => void;
+  onDelete: (id: string) => void;
 }
 
-function ChannelList({ channels, activeId, onSelect, onAdd }: ChannelListProps) {
+function ChannelList({ channels, activeId, onSelect, onAdd, onDelete }: ChannelListProps) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const handleAdd = () => {
@@ -51,13 +53,22 @@ function ChannelList({ channels, activeId, onSelect, onAdd }: ChannelListProps) 
         </div>
       )}
       {channels.map((ch) => (
-        <button key={ch.id} onClick={() => onSelect(ch.id)}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors ${
-            ch.id === activeId ? "bg-dclaw-100 text-dclaw-900 font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-          }`}>
-          <Hash className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{ch.name}</span>
-        </button>
+        <div key={ch.id} className="group relative">
+          <button onClick={() => onSelect(ch.id)}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors ${
+              ch.id === activeId ? "bg-dclaw-100 text-dclaw-900 font-medium" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            }`}>
+            <Hash className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate flex-1 text-left">{ch.name}</span>
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(ch.id); }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+            title="Delete channel"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       ))}
     </div>
   );
@@ -67,12 +78,39 @@ interface TopicsPanelProps {
   topics: ChannelTopic[];
   activeTopic: string | null;
   onSelect: (topic: string | null) => void;
+  onDelete: (topic: string) => void;
 }
 
-function TopicsPanel({ topics, activeTopic, onSelect }: TopicsPanelProps) {
+function TopicsPanel({ topics, activeTopic, onSelect, onDelete }: TopicsPanelProps) {
+  const [confirmTopic, setConfirmTopic] = useState<string | null>(null);
+
   if (topics.length === 0) return null;
   return (
     <div className="mt-2">
+      {/* Confirmation dialog */}
+      {confirmTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-card border rounded-lg shadow-lg p-5 w-72 flex flex-col gap-3">
+            <p className="text-sm font-semibold">Delete topic &quot;{confirmTopic}&quot;?</p>
+            <p className="text-xs text-muted-foreground">
+              This will permanently remove the topic tag from all messages in this channel. Messages themselves are kept.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmTopic(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={() => { onDelete(confirmTopic); setConfirmTopic(null); }}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
           <Tag className="h-3 w-3" />Topics
@@ -85,13 +123,27 @@ function TopicsPanel({ topics, activeTopic, onSelect }: TopicsPanelProps) {
       </div>
       <div className="px-3 py-1 flex flex-col gap-1">
         {topics.map(({ topic, count }) => (
-          <button key={topic} onClick={() => onSelect(activeTopic === topic ? null : topic)}
-            className={`flex items-center justify-between w-full px-2 py-1 rounded-md text-xs transition-colors ${
+          <div
+            key={topic}
+            className={`group flex items-center gap-1 rounded-md text-xs transition-colors ${
               activeTopic === topic ? "bg-accent" : "hover:bg-accent/50"
-            }`}>
-            <TopicBadge topic={topic} small />
-            <span className="text-muted-foreground">{count}</span>
-          </button>
+            }`}
+          >
+            <button
+              onClick={() => onSelect(activeTopic === topic ? null : topic)}
+              className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1"
+            >
+              <TopicBadge topic={topic} small />
+              <span className="ml-auto text-muted-foreground">{count}</span>
+            </button>
+            <button
+              onClick={() => setConfirmTopic(topic)}
+              className="pr-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+              title="Delete topic"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -107,6 +159,7 @@ export function MessagingView() {
   const [pendingAttachments, setPendingAttachments] = useState<MessageAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
+  const [hiddenTopics, setHiddenTopics] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const unfurlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -117,13 +170,14 @@ export function MessagingView() {
   const topics = useMemo<ChannelTopic[]>(() => {
     const counts: Record<string, number> = {};
     for (const m of messages) {
-      if (m.topic && !m.thread_parent_id) counts[m.topic] = (counts[m.topic] ?? 0) + 1;
+      if (m.topic && !m.thread_parent_id && !hiddenTopics.has(m.topic))
+        counts[m.topic] = (counts[m.topic] ?? 0) + 1;
     }
     return Object.entries(counts).map(([topic, count]) => ({ topic, count }))
       .sort((a, b) => b.count - a.count);
-  }, [messages]);
+  }, [messages, hiddenTopics]);
 
-  useEffect(() => { setActiveTopic(null); }, [activeChannelId]);
+  useEffect(() => { setActiveTopic(null); setHiddenTopics(new Set()); }, [activeChannelId]);
 
   useEffect(() => {
     fetch(`${API_BASE}/messaging/channels`)
@@ -147,6 +201,27 @@ export function MessagingView() {
       setActiveChannelId(ch.id);
     }
   }, []);
+
+  const handleDeleteChannel = useCallback(async (id: string) => {
+    await fetch(`${API_BASE}/messaging/channels/${id}`, { method: "DELETE" }).catch(() => {});
+    setChannels((prev) => prev.filter((c) => c.id !== id));
+    if (activeChannelId === id) {
+      setActiveChannelId((prev) => {
+        const remaining = channels.filter((c) => c.id !== id);
+        return remaining.length > 0 ? remaining[0].id : null;
+      });
+    }
+  }, [activeChannelId, channels]);
+
+  const handleDeleteTopic = useCallback(async (topic: string) => {
+    if (activeChannelId) {
+      await fetch(`${API_BASE}/messaging/channels/${activeChannelId}/topics/${encodeURIComponent(topic)}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+    setHiddenTopics((prev) => { const next = new Set(prev); next.add(topic); return next; });
+    if (activeTopic === topic) setActiveTopic(null);
+  }, [activeChannelId, activeTopic]);
 
   // Link unfurling — debounced on input change
   const tryUnfurl = useCallback((text: string) => {
@@ -234,8 +309,8 @@ export function MessagingView() {
           ) : (
             <>
               <ChannelList channels={channels} activeId={activeChannelId}
-                onSelect={setActiveChannelId} onAdd={handleAddChannel} />
-              <TopicsPanel topics={topics} activeTopic={activeTopic} onSelect={setActiveTopic} />
+                onSelect={setActiveChannelId} onAdd={handleAddChannel} onDelete={handleDeleteChannel} />
+              <TopicsPanel topics={topics} activeTopic={activeTopic} onSelect={setActiveTopic} onDelete={handleDeleteTopic} />
             </>
           )}
         </ScrollArea>
@@ -264,6 +339,13 @@ export function MessagingView() {
             {!activeChannel && <span className="text-sm text-muted-foreground">Select a channel</span>}
           </div>
           <div className="flex items-center gap-2">
+            {activeChannelId && (
+              <StartCallButton
+                userId={USER_ID}
+                channelId={activeChannelId}
+                title={`#${activeChannel?.name ?? "call"}`}
+              />
+            )}
             {activeChannelId && (
               <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs text-muted-foreground"
                 onClick={() => setShowGallery((v) => !v)} title="Media gallery">

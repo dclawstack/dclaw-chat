@@ -247,6 +247,25 @@ async def get_channel_topics(
     return [{"topic": row.topic, "count": row.count} for row in result.all()]
 
 
+@router.delete("/channels/{channel_id}/topics/{topic}", status_code=204)
+async def delete_topic(
+    channel_id: str,
+    topic: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    from sqlalchemy import update
+    await db.execute(
+        update(ChannelMessageORM)
+        .where(
+            ChannelMessageORM.channel_id == channel_id,
+            ChannelMessageORM.topic == topic,
+        )
+        .values(topic=None)
+    )
+    await db.commit()
+
+
 @router.get("/channels/{channel_id}/topics/{topic}/summary")
 async def get_topic_summary(
     channel_id: str,

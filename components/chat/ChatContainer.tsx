@@ -10,9 +10,11 @@ import { SwarmStatus } from "@/components/swarm/SwarmStatus";
 import { ChatCopilot } from "@/components/chat-copilot";
 import { MessagingView } from "@/components/messaging/MessagingView";
 import { BotMarketplace } from "@/components/bots/BotMarketplace";
+import { MeetingsTab } from "@/components/meetings/MeetingsTab";
+import { HuddleList } from "@/components/huddles/HuddleList";
 import { chatStream, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Menu, Shield, MessageSquare, Bot, Package } from "lucide-react";
+import { Menu, Shield, MessageSquare, Bot, Package, Video, Radio } from "lucide-react";
 
 // Demo data
 const demoConversations: Conversation[] = [
@@ -70,7 +72,7 @@ export function ChatContainer() {
   const [selectedModel, setSelectedModel] = useState("gemma-4b");
   const [availableModels, setAvailableModels] = useState<AIModel[]>(MODELS);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"ai" | "channels" | "bots">("ai");
+  const [activeTab, setActiveTab] = useState<"ai" | "channels" | "bots" | "meetings" | "huddles">("ai");
   const [activeAgents, setActiveAgents] = useState<string[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{
     intent: string;
@@ -330,6 +332,28 @@ export function ChatContainer() {
           <Package className="h-3.5 w-3.5" />
           Bots
         </button>
+        <button
+          onClick={() => setActiveTab("meetings")}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-colors ${
+            activeTab === "meetings"
+              ? "bg-dclaw-500 text-white font-medium"
+              : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          <Video className="h-3.5 w-3.5" />
+          Meetings
+        </button>
+        <button
+          onClick={() => setActiveTab("huddles")}
+          className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-colors ${
+            activeTab === "huddles"
+              ? "bg-dclaw-500 text-white font-medium"
+              : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          <Radio className="h-3.5 w-3.5" />
+          Huddles
+        </button>
       </div>
 
       {activeTab === "channels" ? (
@@ -339,6 +363,14 @@ export function ChatContainer() {
       ) : activeTab === "bots" ? (
         <div className="flex-1 min-h-0">
           <BotMarketplace />
+        </div>
+      ) : activeTab === "meetings" ? (
+        <div className="flex-1 min-h-0">
+          <MeetingsTab />
+        </div>
+      ) : activeTab === "huddles" ? (
+        <div className="flex-1 min-h-0">
+          <HuddleList userId="local-user" displayName="You" />
         </div>
       ) : (
     <div className="flex flex-1 min-h-0 bg-background">
