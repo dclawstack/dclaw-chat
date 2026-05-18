@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 # Mapping from frontend model IDs to Ollama model names
 OLLAMA_MODELS = {
-    "gemma-4b": "gemma4:latest",
+    "gemma-4b": "gemma4:e2b",
+    "qwen2.5-7b": "qwen2.5:7b",
     "qwen-32b": "qwen3.5:35b",
     "nemotron-cascade-2": "nemotron-cascade-2:latest",
     "glm-4.7-flash": "glm-4.7-flash:latest",
@@ -19,15 +20,22 @@ OLLAMA_MODELS = {
 
 # Friendly names for discovered Ollama models
 OLLAMA_MODEL_NAMES = {
+    "gemma4:e2b": "Gemma 4B",
     "gemma4:latest": "Gemma 4B",
+    "qwen2.5:7b": "Qwen 2.5 7B",
     "qwen3.5:35b": "Qwen 3.5 35B",
     "glm-4.7-flash:latest": "GLM 4.7 Flash",
     "nemotron-cascade-2:latest": "Nemotron Cascade 2",
     "legraphista/Orpheus:3b-ft-q8": "Orpheus 3B",
 }
 
-# Reverse lookup: Ollama name → frontend ID
-OLLAMA_NAME_TO_ID = {v: k for k, v in OLLAMA_MODELS.items()}
+# Reverse lookup: Ollama name → frontend ID (covers all known tag variants)
+OLLAMA_NAME_TO_ID: dict[str, str] = {v: k for k, v in OLLAMA_MODELS.items()}
+OLLAMA_NAME_TO_ID.update({
+    "gemma4:latest": "gemma-4b",
+    "gemma4:e2b": "gemma-4b",
+    "gemma4:2b": "gemma-4b",
+})
 
 
 class OllamaService:
