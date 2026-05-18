@@ -52,7 +52,7 @@ function BotCard({ bot, onInstall, onUninstall, onEdit, loading }: BotCardProps)
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-sm">{bot.name}</span>
               {bot.installed && (
-                <CheckCircle className="h-3.5 w-3.5 text-dclaw-500 shrink-0" title="Installed" />
+                <CheckCircle className="h-3.5 w-3.5 text-dclaw-500 shrink-0" aria-label="Installed" />
               )}
             </div>
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">
