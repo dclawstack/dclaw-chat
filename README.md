@@ -323,9 +323,9 @@ See [`docs/getting-started/configuration.md`](./docs/getting-started/configurati
 
 ## Code Manager
 
-| Name | Role |
-|------|------|
-| Tharuni | Code Manager |
+| Name | Role | Email |
+|------|------|-------|
+| Tharuni Dayara | Code Manager | tharunidayara@gmail.com |
 
 ---
 

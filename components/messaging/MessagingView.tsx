@@ -13,7 +13,7 @@ import { TopicBadge } from "./TopicBadge";
 import { Hash, Plus, Send, Wifi, WifiOff, Loader2, Tag, X, Paperclip, Images, Trash2 } from "lucide-react";
 import { StartCallButton } from "@/components/calls/StartCallButton";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 const USER_ID = "dev-user";
 const USER_NAME = "You";
 const URL_RE = /https?:\/\/[^\s]+/;

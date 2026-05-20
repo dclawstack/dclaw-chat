@@ -3,7 +3,7 @@
 import { MessageAttachment, FileAttachment, LinkPreview } from "@/types/chat";
 import { FileText, Download, Film, ExternalLink } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 function fmt(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -12,7 +12,7 @@ function fmt(bytes: number) {
 }
 
 function resolveUrl(url: string) {
-  if (url.startsWith("/api/")) return `http://localhost:8090${url}`;
+  if (url.startsWith("/api/")) return `http://localhost:8000${url}`;
   return url;
 }
 
