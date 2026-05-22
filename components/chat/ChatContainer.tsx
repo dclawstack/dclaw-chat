@@ -135,9 +135,22 @@ export function ChatContainer() {
 
   const handleSendMessage = useCallback(
     async (content: string) => {
-      if (!activeConversationId) {
-        handleNewConversation();
-        return;
+      // Auto-create a conversation if none is active (e.g. user clicked a suggestion before picking one)
+      let targetId = activeConversationId;
+      let priorMessages: Message[] = [];
+      if (!targetId) {
+        targetId = Date.now().toString();
+        const newConversation: Conversation = {
+          id: targetId,
+          title: "New Conversation",
+          messages: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        setConversations((prev) => [newConversation, ...prev]);
+        setActiveConversationId(targetId);
+      } else {
+        priorMessages = conversations.find((c) => c.id === targetId)?.messages || [];
       }
 
       const userMessage: Message = {
@@ -149,7 +162,7 @@ export function ChatContainer() {
 
       setConversations((prev) =>
         prev.map((c) =>
-          c.id === activeConversationId
+          c.id === targetId
             ? { ...c, messages: [...c.messages, userMessage], updatedAt: new Date() }
             : c
         )
@@ -159,14 +172,11 @@ export function ChatContainer() {
       setError(null);
 
       try {
-        const conversation = conversations.find((c) => c.id === activeConversationId);
-
-        // Build messages for backend API
-        // conversation.messages already includes the user message from state update above
-        const apiMessages = conversation?.messages.map((m) => ({
+        // Include the just-added user message — state hasn't propagated yet, so build it inline
+        const apiMessages = [...priorMessages, userMessage].map((m) => ({
           role: m.role,
           content: m.content,
-        })) || [];
+        }));
 
         // Generate swarm plan for UI visualization
         const lower = content.toLowerCase();
@@ -199,7 +209,7 @@ export function ChatContainer() {
         // Insert an empty assistant message placeholder
         setConversations((prev) =>
           prev.map((c) =>
-            c.id === activeConversationId
+            c.id === targetId
               ? {
                   ...c,
                   messages: [
@@ -224,7 +234,7 @@ export function ChatContainer() {
 
         await chatStream(
           {
-            conversation_id: activeConversationId,
+            conversation_id: targetId,
             messages: apiMessages,
             model: selectedModel,
             temperature: 0.7,
@@ -233,7 +243,7 @@ export function ChatContainer() {
             onToken: (token) => {
               setConversations((prev) =>
                 prev.map((c) =>
-                  c.id === activeConversationId
+                  c.id === targetId
                     ? {
                         ...c,
                         messages: c.messages.map((m) =>
@@ -254,7 +264,7 @@ export function ChatContainer() {
               setError(errorText);
               setConversations((prev) =>
                 prev.map((c) =>
-                  c.id === activeConversationId
+                  c.id === targetId
                     ? {
                         ...c,
                         messages: c.messages.map((m) =>
@@ -283,7 +293,7 @@ export function ChatContainer() {
         };
         setConversations((prev) =>
           prev.map((c) =>
-            c.id === activeConversationId
+            c.id === targetId
               ? { ...c, messages: [...c.messages, errorMessage] }
               : c
           )
@@ -292,7 +302,7 @@ export function ChatContainer() {
         setIsLoading(false);
       }
     },
-    [activeConversationId, selectedModel, handleNewConversation, conversations]
+    [activeConversationId, selectedModel, availableModels, conversations]
   );
 
   return (
@@ -448,6 +458,7 @@ export function ChatContainer() {
         <MessageList
           messages={activeConversation?.messages || []}
           isLoading={isLoading}
+          onSuggestionClick={handleSendMessage}
         />
 
         {/* Swarm Status */}
@@ -457,7 +468,6 @@ export function ChatContainer() {
         <ChatInput
           onSend={handleSendMessage}
           isLoading={isLoading}
-          disabled={!activeConversationId}
         />
       </div>
     </div>

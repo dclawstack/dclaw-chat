@@ -9,9 +9,10 @@ import { Loader2 } from "lucide-react";
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
+  onSuggestionClick?: (text: string) => void;
 }
 
-export function MessageList({ messages, isLoading }: MessageListProps) {
+export function MessageList({ messages, isLoading, onSuggestionClick }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +39,9 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
           ].map((suggestion) => (
             <button
               key={suggestion}
-              className="px-3 py-2 text-xs bg-muted rounded-lg hover:bg-accent transition-colors"
+              onClick={() => onSuggestionClick?.(suggestion)}
+              disabled={!onSuggestionClick}
+              className="px-3 py-2 text-xs bg-muted rounded-lg hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {suggestion}
             </button>
