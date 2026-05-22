@@ -5,10 +5,10 @@ import { ChannelMessage, FileAttachment } from "@/types/chat";
 import { X, Images, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
 
 function resolveUrl(url: string) {
-  if (url.startsWith("/api/")) return `http://localhost:8000${url}`;
+  if (url.startsWith("/api/")) return `http://localhost:8090${url}`;
   return url;
 }
 

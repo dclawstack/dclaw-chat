@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
 
 export interface ApiMessage {
   role: "user" | "assistant" | "system";
@@ -361,7 +361,7 @@ export async function deleteCallRoom(roomId: string): Promise<void> {
 }
 
 export function buildSignalingUrl(roomId: string, userId: string): string {
-  const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
+  const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1")
     .replace(/^http/, "ws");
   return `${wsBase}/calls/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
 }
@@ -479,7 +479,7 @@ export async function deleteHuddle(roomId: string): Promise<void> {
 }
 
 export function buildHuddleWsUrl(roomId: string, userId: string): string {
-  const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
+  const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1")
     .replace(/^http/, "ws");
   return `${wsBase}/huddles/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
 }

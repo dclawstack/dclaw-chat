@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { X, Send, Sparkles, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { TopicBadge } from "@/components/messaging/TopicBadge";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8090/api/v1";
 
 interface ThreadViewProps {
   parent: ChannelMessage;
