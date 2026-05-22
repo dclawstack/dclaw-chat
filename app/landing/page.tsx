@@ -3,6 +3,7 @@ import {
   Bot, MessageSquare, Video, Users, Shield, Zap,
   Radio, Package, Mic, Brain, Lock, ArrowRight,
   CheckCircle, Star, ChevronRight, Globe, Cpu, Monitor,
+  Palette, Sun, Moon, Settings as SettingsIcon, Sparkles,
 } from "lucide-react";
 
 // ── Reusable primitives ───────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ function Navbar() {
           <span className="font-display text-sm font-bold text-white">DClaw Chat</span>
         </div>
         <div className="hidden items-center gap-6 md:flex">
-          {["Features", "Calls", "AI", "Security"].map((item) => (
+          {["Features", "Calls", "AI", "Security", "Personalize"].map((item) => (
             <a
               key={item}
               href={`#${item.toLowerCase()}`}
@@ -115,7 +116,7 @@ function Hero() {
 
       <div className="mx-auto max-w-4xl px-6 text-center">
         <Badge>
-          <Star className="h-3 w-3" /> Now with WebRTC Calls & AI Meetings
+          <Star className="h-3 w-3" /> New: Light/Dark themes · WebRTC Calls · AI Meetings
         </Badge>
 
         <h1 className="mt-6 font-display text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
@@ -200,6 +201,12 @@ function FeaturesGrid() {
             description="Multiple specialized AI agents collaborate on complex tasks — code, research, memory, and privacy all handled in parallel." />
           <FeatureCard icon={Lock} accent="orange" title="Local-first Privacy"
             description="Run LLMs entirely on your own hardware. No data leaves your network. Full GDPR and HIPAA compatibility." />
+          <FeatureCard icon={Palette} accent="pink" title="Light & Dark Themes"
+            description="Pick Light, Dark, or System mode from Settings. The whole app — including the sidebar, chat, and dialogs — switches instantly and persists across sessions." />
+          <FeatureCard icon={SettingsIcon} accent="violet" title="Customizable Settings"
+            description="Set your default model, tune temperature with a live slider, see the active API endpoint, and clear conversations — all from a single Settings dialog." />
+          <FeatureCard icon={Sparkles} accent="green" title="Quick-start Suggestions"
+            description="One-click prompt suggestions get you chatting in seconds. Auto-creates a fresh conversation so you can jump straight from idle to insight." />
         </div>
       </div>
     </section>
@@ -539,6 +546,102 @@ function SecuritySection() {
   );
 }
 
+// ── Personalize section ───────────────────────────────────────────────────────
+
+function PersonalizeSection() {
+  return (
+    <section id="personalize" className="py-24">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          {/* Mock Settings dialog */}
+          <div className="rounded-2xl border border-white/8 bg-dk-surface-raised overflow-hidden shadow-dk-lg">
+            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <SettingsIcon className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-semibold text-white">Settings</span>
+              </div>
+              <span className="text-[10px] text-dk-muted">esc to close</span>
+            </div>
+            <div className="space-y-5 p-5">
+              {/* Theme */}
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-dk-muted">
+                  <Palette className="h-3 w-3" /> Appearance
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { Icon: Sun, label: "Light", active: false },
+                    { Icon: Moon, label: "Dark", active: true },
+                    { Icon: Monitor, label: "System", active: false },
+                  ].map(({ Icon, label, active }) => (
+                    <div
+                      key={label}
+                      className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-[11px] ${
+                        active
+                          ? "border-blue-500 bg-blue-500/10 text-white"
+                          : "border-white/10 text-dk-muted"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Model */}
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-dk-muted">
+                  <Cpu className="h-3 w-3" /> Default model
+                </p>
+                <div className="rounded-md border border-white/10 bg-dk-surface px-3 py-2 text-xs text-white">
+                  Gemma 4B
+                </div>
+              </div>
+              {/* Temperature */}
+              <div>
+                <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-dk-muted">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3" /> Temperature
+                  </span>
+                  <span className="font-mono text-white">0.70</span>
+                </div>
+                <div className="relative h-1.5 rounded-full bg-white/10">
+                  <div className="absolute inset-y-0 left-0 w-[70%] rounded-full bg-blue-500" />
+                  <div className="absolute left-[70%] -top-1 h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-blue-400 ring-2 ring-blue-500/40" />
+                </div>
+                <div className="mt-1 flex justify-between text-[9px] text-dk-muted">
+                  <span>Focused</span>
+                  <span>Creative</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Text */}
+          <div>
+            <SectionLabel>Personalize</SectionLabel>
+            <h2 className="font-display text-4xl font-bold text-white">
+              Make it <GradientText>yours</GradientText>
+            </h2>
+            <p className="mt-4 leading-relaxed text-dk-muted">
+              Every setting respects your preferences and persists across sessions.
+              Switch between Light, Dark, and System themes, pick your default model,
+              and tune how creative the AI should be — without leaving the chat.
+            </p>
+            <ul className="mt-8 space-y-3">
+              <Check>Light, Dark, and System theme modes — switches instantly</Check>
+              <Check>Persistent default model that loads on every visit</Check>
+              <Check>Temperature slider tunes AI focus vs. creativity</Check>
+              <Check>One-click clear-all-conversations with confirm step</Check>
+              <Check>API endpoint shown for self-host debugging</Check>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── CTA ───────────────────────────────────────────────────────────────────────
 
 function CTA() {
@@ -606,6 +709,7 @@ export default function LandingPage() {
         <ChannelsSection />
         <MeetingsSection />
         <SecuritySection />
+        <PersonalizeSection />
         <CTA />
       </main>
       <Footer />
