@@ -4,7 +4,42 @@
 
 @layer base {
   :root {
-    /* DKube dark theme as default for DClaw Chat */
+    /* Light theme (default) */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 12%;
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 10% 12%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 5% 40%;
+    --accent: 240 5% 94%;
+    --accent-foreground: 240 10% 12%;
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 217 91% 55%;
+    --radius: 0.625rem;
+
+    /* DKube raw tokens — light variants */
+    --dk-purple: #6B53A3;
+    --dk-purple-light: #9985BF;
+    --dk-purple-deep: #4A3A7A;
+    --dk-surface: #FFFFFF;
+    --dk-surface-raised: #F4F2F8;
+    --dk-surface-elevated: #EAE7F0;
+    --dk-body: #1A1A1F;
+    --dk-muted: #6E6E76;
+    --dk-muted-darker: #9E9AAB;
+  }
+
+  .dark {
+    /* DKube dark theme */
     --background: 240 6% 6%;
     --foreground: 260 20% 96%;
     --card: 240 5% 11%;
@@ -24,12 +59,8 @@
     --border: 240 4% 20%;
     --input: 240 4% 20%;
     --ring: 217 91% 60%;
-    --radius: 0.625rem;
 
-    /* DKube raw tokens */
-    --dk-purple: #6B53A3;
-    --dk-purple-light: #9985BF;
-    --dk-purple-deep: #4A3A7A;
+    /* DKube raw tokens — dark variants */
     --dk-surface: #0E0E10;
     --dk-surface-raised: #1F1F23;
     --dk-surface-elevated: #2A2A30;

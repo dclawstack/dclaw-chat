@@ -12,7 +12,7 @@ import { MessagingView } from "@/components/messaging/MessagingView";
 import { BotMarketplace } from "@/components/bots/BotMarketplace";
 import { MeetingsTab } from "@/components/meetings/MeetingsTab";
 import { HuddleList } from "@/components/huddles/HuddleList";
-import { SettingsDialog, getStoredTemperature, getStoredDefaultModel } from "./SettingsDialog";
+import { SettingsDialog, getStoredTemperature, getStoredDefaultModel, useThemeSync } from "./SettingsDialog";
 import { chatStream, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Menu, Shield, MessageSquare, Bot, Package, Video, Radio } from "lucide-react";
@@ -66,6 +66,7 @@ const demoConversations: Conversation[] = [
 ];
 
 export function ChatContainer() {
+  useThemeSync();
   const [conversations, setConversations] = useState<Conversation[]>(demoConversations);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);

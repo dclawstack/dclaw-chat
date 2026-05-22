@@ -36,7 +36,14 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${inter.variable} ${manrope.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="antialiased bg-dk-surface text-dk-body">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('dclaw.chat.theme');var m=s==='light'||s==='dark'||s==='system'?s:'system';var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(m==='dark'||(m==='system'&&d))document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body className="antialiased bg-background text-foreground">
         {children}
       </body>
     </html>

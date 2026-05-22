@@ -2,11 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Settings as SettingsIcon, Trash2, Server, Cpu, Sparkles } from "lucide-react";
+import {
+  X,
+  Settings as SettingsIcon,
+  Trash2,
+  Server,
+  Cpu,
+  Sparkles,
+  Sun,
+  Moon,
+  Monitor,
+  Palette,
+} from "lucide-react";
 import { AIModel } from "@/types/chat";
 
 const TEMP_KEY = "dclaw.chat.temperature";
 const DEFAULT_MODEL_KEY = "dclaw.chat.defaultModel";
+const THEME_KEY = "dclaw.chat.theme";
+
+export type ThemeMode = "light" | "dark" | "system";
 
 export function getStoredTemperature(): number {
   if (typeof window === "undefined") return 0.7;
@@ -18,6 +32,38 @@ export function getStoredTemperature(): number {
 export function getStoredDefaultModel(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(DEFAULT_MODEL_KEY);
+}
+
+export function getStoredTheme(): ThemeMode {
+  if (typeof window === "undefined") return "system";
+  const raw = window.localStorage.getItem(THEME_KEY);
+  return raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
+}
+
+function applyTheme(mode: ThemeMode) {
+  if (typeof document === "undefined") return;
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const isDark = mode === "dark" || (mode === "system" && prefersDark);
+  document.documentElement.classList.toggle("dark", isDark);
+}
+
+export function setStoredTheme(mode: ThemeMode) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(THEME_KEY, mode);
+  applyTheme(mode);
+}
+
+/** Wire up the OS-preference listener so "system" mode reacts live. Call once at app mount. */
+export function useThemeSync() {
+  useEffect(() => {
+    applyTheme(getStoredTheme());
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if (getStoredTheme() === "system") applyTheme("system");
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 }
 
 interface SettingsDialogProps {
@@ -38,11 +84,13 @@ export function SettingsDialog({
   onClearAllConversations,
 }: SettingsDialogProps) {
   const [temperature, setTemperature] = useState<number>(0.7);
+  const [theme, setTheme] = useState<ThemeMode>("system");
   const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     if (open) {
       setTemperature(getStoredTemperature());
+      setTheme(getStoredTheme());
       setConfirmClear(false);
     }
   }, [open]);
@@ -70,6 +118,11 @@ export function SettingsDialog({
     window.localStorage.setItem(DEFAULT_MODEL_KEY, id);
   }
 
+  function handleThemeChange(mode: ThemeMode) {
+    setTheme(mode);
+    setStoredTheme(mode);
+  }
+
   function handleClear() {
     if (!confirmClear) {
       setConfirmClear(true);
@@ -95,6 +148,39 @@ export function SettingsDialog({
         </div>
 
         <div className="space-y-5 px-4 py-4 text-sm">
+          {/* Theme */}
+          <section>
+            <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Palette className="h-3.5 w-3.5" />
+              APPEARANCE
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { mode: "light" as const, label: "Light", Icon: Sun },
+                  { mode: "dark" as const, label: "Dark", Icon: Moon },
+                  { mode: "system" as const, label: "System", Icon: Monitor },
+                ]
+              ).map(({ mode, label, Icon }) => {
+                const active = theme === mode;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => handleThemeChange(mode)}
+                    className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-xs transition-colors ${
+                      active
+                        ? "border-dclaw-500 bg-dclaw-500/10 text-foreground"
+                        : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           {/* Default Model */}
           <section>
             <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
