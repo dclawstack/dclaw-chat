@@ -12,6 +12,7 @@ import { MessagingView } from "@/components/messaging/MessagingView";
 import { BotMarketplace } from "@/components/bots/BotMarketplace";
 import { MeetingsTab } from "@/components/meetings/MeetingsTab";
 import { HuddleList } from "@/components/huddles/HuddleList";
+import { SettingsDialog, getStoredTemperature, getStoredDefaultModel } from "./SettingsDialog";
 import { chatStream, listModels } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Menu, Shield, MessageSquare, Bot, Package, Video, Radio } from "lucide-react";
@@ -72,6 +73,7 @@ export function ChatContainer() {
   const [selectedModel, setSelectedModel] = useState("gemma-4b");
   const [availableModels, setAvailableModels] = useState<AIModel[]>(MODELS);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"ai" | "channels" | "bots" | "meetings" | "huddles">("ai");
   const [activeAgents, setActiveAgents] = useState<string[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{
@@ -85,20 +87,23 @@ export function ChatContainer() {
     (c) => c.id === activeConversationId
   );
 
-  // Fetch available models from backend on mount
+  // Fetch available models from backend on mount; honor stored default model
   useEffect(() => {
+    const storedDefault = getStoredDefaultModel();
     listModels()
       .then((models) => {
         setAvailableModels(models);
-        // If current selection isn't available, pick first available
-        const currentAvailable = models.find((m) => m.id === selectedModel)?.available;
-        if (!currentAvailable) {
+        const desired = storedDefault ?? selectedModel;
+        const desiredAvailable = models.find((m) => m.id === desired)?.available;
+        if (desiredAvailable) {
+          if (desired !== selectedModel) setSelectedModel(desired);
+        } else {
           const firstAvailable = models.find((m) => m.available);
           if (firstAvailable) setSelectedModel(firstAvailable.id);
         }
       })
       .catch(() => {
-        // Fallback to hardcoded models if backend unreachable
+        if (storedDefault) setSelectedModel(storedDefault);
       });
   }, []);
 
@@ -237,7 +242,7 @@ export function ChatContainer() {
             conversation_id: targetId,
             messages: apiMessages,
             model: selectedModel,
-            temperature: 0.7,
+            temperature: getStoredTemperature(),
           },
           {
             onToken: (token) => {
@@ -304,6 +309,13 @@ export function ChatContainer() {
     },
     [activeConversationId, selectedModel, availableModels, conversations]
   );
+
+  const handleClearAllConversations = useCallback(() => {
+    setConversations([]);
+    setActiveConversationId(null);
+    setCurrentPlan(undefined);
+    setActiveAgents([]);
+  }, []);
 
   return (
     <div className="flex h-screen bg-background flex-col">
@@ -390,6 +402,7 @@ export function ChatContainer() {
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
@@ -472,6 +485,15 @@ export function ChatContainer() {
       </div>
     </div>
     )}
+
+    <SettingsDialog
+      open={isSettingsOpen}
+      onClose={() => setIsSettingsOpen(false)}
+      models={availableModels}
+      selectedModel={selectedModel}
+      onSelectModel={setSelectedModel}
+      onClearAllConversations={handleClearAllConversations}
+    />
     </div>
   );
 }

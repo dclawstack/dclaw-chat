@@ -18,6 +18,7 @@ interface SidebarProps {
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
   onDeleteConversation: (id: string) => void;
+  onOpenSettings: () => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -28,6 +29,7 @@ export function Sidebar({
   onSelectConversation,
   onNewConversation,
   onDeleteConversation,
+  onOpenSettings,
   isOpen,
   onClose,
 }: SidebarProps) {
@@ -119,7 +121,12 @@ export function Sidebar({
 
         {/* Footer */}
         <div className="p-3 border-t">
-          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenSettings}
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+          >
             <Settings className="h-4 w-4" />
             Settings
           </Button>
