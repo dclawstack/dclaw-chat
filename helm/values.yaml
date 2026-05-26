@@ -1,0 +1,46 @@
+# Default values = DEV / local cluster. Reproduces the live dclaw-core deployment.
+# dclaw-chat is FRONTEND-ONLY (single container on port 80) — no backend, no secret.
+# Plain `helm install dclaw-chat ./helm -n dclaw-core` brings the app up.
+# For the cloud/GHCR deployment, override with: -f values-prod.yaml
+
+nameOverride: ""
+
+backend:
+  enabled: false
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  # Live Deployment is the bare name "dclaw-chat".
+  deploymentName: dclaw-chat
+  image:
+    repository: docker.io/library/dclaw-chat
+    tag: local
+    pullPolicy: Never
+  containerPort: 80
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30002
+  env: {}
+  readinessProbe:
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Frontend-only app: no app Secret.
+secret: null
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  host: ""
+  tls: []

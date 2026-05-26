@@ -1,0 +1,21 @@
+# Cloud / production overrides. Use with:
+#   helm install dclaw-chat ./helm -n <ns> -f values-prod.yaml
+
+frontend:
+  image:
+    repository: ghcr.io/dclawstack/dclaw-chat
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: chat.dclawstack.io
+  tls:
+    - secretName: dclaw-chat-tls
+      hosts:
+        - chat.dclawstack.io
