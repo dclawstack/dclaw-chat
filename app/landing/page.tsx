@@ -5,6 +5,8 @@ import {
   CheckCircle, Star, ChevronRight, Globe, Cpu, Monitor,
   Palette, Sun, Moon, Settings as SettingsIcon, Sparkles,
 } from "lucide-react";
+// Demo seed/clear controls — isolated under components/landing/ for easy removal.
+import SeedControls from "@/components/landing/seed-controls";
 
 // ── Reusable primitives ───────────────────────────────────────────────────────
 
@@ -703,6 +705,7 @@ export default function LandingPage() {
       <Navbar />
       <main>
         <Hero />
+        <SeedControls />
         <FeaturesGrid />
         <CallsSection />
         <AISection />
