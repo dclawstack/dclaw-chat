@@ -1,6 +1,12 @@
 # Cloud / production overrides. Use with:
 #   helm install dclaw-chat ./helm -n <ns> -f values-prod.yaml
 
+backend:
+  image:
+    repository: ghcr.io/dclawstack/dclaw-chat-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
 frontend:
   image:
     repository: ghcr.io/dclawstack/dclaw-chat

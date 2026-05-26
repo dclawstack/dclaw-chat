@@ -1,12 +1,38 @@
-# Default values = DEV / local cluster. Reproduces the live dclaw-core deployment.
-# dclaw-chat is FRONTEND-ONLY (single container on port 80) — no backend, no secret.
-# Plain `helm install dclaw-chat ./helm -n dclaw-core` brings the app up.
+# Default values = DEV / local cluster.
+# Frontend: static nginx build on :80 (NodePort 30002) that proxies /api -> backend.
+# Backend: FastAPI on :8000 (ClusterIP), shared dclaw-shared-postgres / dclaw_chat DB.
+# Plain `helm install dclaw-chat ./helm -n dclaw-core` brings both up.
 # For the cloud/GHCR deployment, override with: -f values-prod.yaml
 
 nameOverride: ""
 
 backend:
-  enabled: false
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: docker.io/library/dclaw-chat-backend
+    tag: local
+    pullPolicy: Never
+  containerPort: 8000
+  service:
+    type: ClusterIP
+    port: 8000
+  env: {}
+  livenessProbe:
+    path: /api/v1/health
+    initialDelaySeconds: 15
+    periodSeconds: 30
+  readinessProbe:
+    path: /api/v1/health
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 frontend:
   enabled: true
@@ -35,8 +61,13 @@ frontend:
       cpu: 200m
       memory: 128Mi
 
-# Frontend-only app: no app Secret.
-secret: null
+# Backend config (mounted into the backend via envFrom). DATABASE_URL points at the
+# shared postgres / dclaw_chat. LLM keys (OPENROUTER_API_KEY etc.) can be added here
+# later for live chat; seed/clear + browsing seeded data do not need them.
+secret:
+  name: ""
+  data:
+    DATABASE_URL: postgresql+asyncpg://postgres:postgres@dclaw-shared-postgres:5432/dclaw_chat
 
 ingress:
   enabled: false
