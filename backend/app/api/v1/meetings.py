@@ -128,6 +128,10 @@ async def get_meeting(
     meeting = await repo.get_by_id(meeting_id)
     if not meeting:
         raise HTTPException(404, "Meeting not found")
+    # Authorization: a meeting may only be read by its owner (was an IDOR — any
+    # authenticated user could fetch any meeting by id).
+    if meeting.created_by and meeting.created_by != user.user_id:
+        raise HTTPException(403, "Forbidden")
     return meeting
 
 
