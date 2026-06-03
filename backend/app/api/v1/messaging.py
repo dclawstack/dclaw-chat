@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, update, func as sa_func
 from pydantic import BaseModel, field_validator
 
 import jwt
@@ -179,9 +179,12 @@ async def send_message(
     )
     db.add(msg)
     if req.thread_parent_id:
-        parent = await db.get(ChannelMessageORM, req.thread_parent_id)
-        if parent:
-            parent.reply_count += 1
+        # Atomic increment — avoids lost updates from concurrent replies.
+        await db.execute(
+            update(ChannelMessageORM)
+            .where(ChannelMessageORM.id == req.thread_parent_id)
+            .values(reply_count=ChannelMessageORM.reply_count + 1)
+        )
     await db.commit()
     await db.refresh(msg)
     await manager.broadcast(channel_id, _msg_to_dict(msg))
@@ -443,9 +446,12 @@ async def _generate_ai_reply(
             )
             db.add(ai_msg)
             if thread_parent_id:
-                parent = await db.get(ChannelMessageORM, thread_parent_id)
-                if parent:
-                    parent.reply_count += 1
+                # Atomic increment — avoids lost updates from concurrent replies.
+                await db.execute(
+                    update(ChannelMessageORM)
+                    .where(ChannelMessageORM.id == thread_parent_id)
+                    .values(reply_count=ChannelMessageORM.reply_count + 1)
+                )
             await db.commit()
             await db.refresh(ai_msg)
 
@@ -554,9 +560,12 @@ async def websocket_endpoint(
                     )
                     db.add(msg)
                     if data.get("thread_parent_id"):
-                        parent = await db.get(ChannelMessageORM, data["thread_parent_id"])
-                        if parent:
-                            parent.reply_count += 1
+                        # Atomic increment — avoids lost updates from concurrent replies.
+                        await db.execute(
+                            update(ChannelMessageORM)
+                            .where(ChannelMessageORM.id == data["thread_parent_id"])
+                            .values(reply_count=ChannelMessageORM.reply_count + 1)
+                        )
                     await db.commit()
                     await db.refresh(msg)
                     hist_result = await db.execute(
