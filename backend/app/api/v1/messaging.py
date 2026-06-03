@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func as sa_func
 from pydantic import BaseModel, field_validator
 
+import jwt
+
 from app.core.database import get_db, async_session
+from app.core.config import get_settings
 from app.core.deps import get_current_user, CurrentUser
 from app.models.channel import ChannelORM, ChannelMessageORM
 from app.models.bot import BotORM
@@ -460,13 +463,51 @@ async def _generate_ai_reply(
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 
+def _authenticate_ws(websocket: WebSocket) -> Optional[tuple[str, str]]:
+    """Derive (user_id, user_name) from a verified token on the WebSocket.
+
+    The token is read from the ``token`` query param or the ``access_token``
+    cookie and decoded with the same logic as the HTTP auth dependency
+    (see ``app.core.deps.get_current_user``). Identity is taken only from the
+    verified claims — never from client-supplied user_id/user_name params.
+    Returns None when authentication fails.
+    """
+    settings = get_settings()
+    token = websocket.query_params.get("token") or websocket.cookies.get("access_token")
+
+    if not token:
+        if settings.DEBUG:
+            return ("dev-user", "You")
+        return None
+
+    try:
+        payload = jwt.decode(
+            token,
+            options={"verify_signature": False, "verify_exp": True},
+            algorithms=["HS256", "RS256"],
+            audience=settings.LOGTO_AUDIENCE or None,
+        )
+    except jwt.InvalidTokenError:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    user_name = payload.get("name") or payload.get("email") or "User"
+    return (user_id, user_name)
+
+
 @router.websocket("/ws/{channel_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
     channel_id: str,
-    user_id: str = "dev-user",
-    user_name: str = "You",
 ):
+    auth = _authenticate_ws(websocket)
+    if auth is None:
+        await websocket.close(code=1008)
+        return
+    user_id, user_name = auth
+
     await manager.connect(websocket, user_id)
     manager.subscribe(channel_id, user_id)
 

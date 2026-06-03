@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
 
+    # Admin: fail-closed gate for destructive seed/clear endpoints
+    admin_enabled: bool = False
+
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_chat"
 
