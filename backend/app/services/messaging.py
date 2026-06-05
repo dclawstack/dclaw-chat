@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, Set, Optional
 from fastapi import WebSocket
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +43,21 @@ class ConnectionManager:
             if uid == exclude_user:
                 continue
             ws = self._connections.get(uid)
-            if ws:
-                try:
-                    await ws.send_json(payload)
-                except Exception:
+            if ws is None:
+                continue
+            try:
+                await ws.send_json(payload)
+            except WebSocketDisconnect:
+                # Genuine client disconnect — drop them.
+                dead.append(uid)
+            except Exception as exc:
+                # Transient/unknown send failure: only treat as dead if the
+                # socket is no longer connected, otherwise just log it.
+                logger.warning(f"WS broadcast send failed for {uid}: {exc!r}")
+                if getattr(ws, "application_state", None) != WebSocketState.CONNECTED:
                     dead.append(uid)
+        # Clean up dead connections only after iterating the copied subscriber
+        # set, so we never mutate the live subscription/typing maps mid-loop.
         for uid in dead:
             self.disconnect(uid)
 

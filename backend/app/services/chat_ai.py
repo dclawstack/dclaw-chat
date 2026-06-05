@@ -92,9 +92,7 @@ class ChatAIService:
         logger.info(
             f"Copilot chat: model={ollama_model}, rag_chunks={len(context_snippets)}"
         )
-        content = await self.ollama.chat(
-            req.model or list(OLLAMA_MODELS.keys())[0], messages
-        )
+        content = await self.ollama.chat(ollama_model, messages)
 
         return AIChatResponse(
             answer=content,
@@ -133,7 +131,7 @@ class ChatAIService:
         messages = [Message(role="user", content=prompt)]
         logger.info(f"Summarizing conversation {req.conversation_id}: {len(history)} msgs")
         summary_text = await self.ollama.chat(
-            req.model or list(OLLAMA_MODELS.keys())[0], messages, temperature=0.3
+            ollama_model, messages, temperature=0.3
         )
 
         return SummarizeResponse(
@@ -164,10 +162,11 @@ class ChatAIService:
             f"--- CONVERSATION ---\n{transcript[:6000]}\n---\n\nActions:"
         )
 
+        ollama_model = self._pick_model(req.model)
         messages = [Message(role="user", content=prompt)]
         logger.info(f"Extracting actions from conversation {req.conversation_id}")
         raw = await self.ollama.chat(
-            req.model or list(OLLAMA_MODELS.keys())[0], messages, temperature=0.2
+            ollama_model, messages, temperature=0.2
         )
 
         actions: List[ExtractedAction] = []
