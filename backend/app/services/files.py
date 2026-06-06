@@ -6,9 +6,14 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
+from fastapi import HTTPException
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Maximum allowed upload size (25 MiB) and streaming chunk size (1 MiB).
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
 VIDEO_MIMES = {"video/mp4", "video/webm", "video/ogg"}
@@ -38,15 +43,29 @@ class FileService:
 
         dest_dir = UPLOAD_DIR / file_id
         dest_dir.mkdir(parents=True, exist_ok=True)
-        content = await file.read()
-        (dest_dir / safe_name).write_bytes(content)
+        dest_path = dest_dir / safe_name
+
+        # Stream to disk in chunks, enforcing a maximum size so a large upload
+        # can't exhaust memory or disk.
+        size = 0
+        with dest_path.open("wb") as out:
+            while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+                size += len(chunk)
+                if size > MAX_UPLOAD_SIZE:
+                    out.close()
+                    dest_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        413,
+                        f"File too large (max {MAX_UPLOAD_SIZE // (1024 * 1024)} MiB)",
+                    )
+                out.write(chunk)
 
         return {
             "type": "image" if mime in IMAGE_MIMES else ("video" if mime in VIDEO_MIMES else "file"),
             "id": file_id,
             "name": safe_name,
             "mime_type": mime,
-            "size": len(content),
+            "size": size,
             "url": f"/api/v1/messaging/files/{file_id}/{safe_name}",
         }
 
