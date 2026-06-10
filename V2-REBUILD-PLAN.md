@@ -153,14 +153,19 @@ Fallback: cloud unreachable → degrade to T0 + "local mode" badge (the privacy 
 
 ## 6. Phase Plan to v2.0
 
-### Phase 0 — Trust floor (Week 1) · *on current stack, before migration*
+### Phase 0 — Trust floor · ✅ **COMPLETE 2026-06-10**
 - Conversations ownership: `created_by` column + migration, owner-filtered list, 403 on foreign access; authorize `conversation_id` in chat routes (GAP T2-01/02)
 - Frontend auth: Logto login, `Bearer` on REST, `?token=` on WS; delete `?user_id=` params (T3-08)
 - `ENVIRONMENT=production` set in every deploy manifest + CI render assertion (T3-05)
 - `serve_file`: auth + access check, `Content-Disposition: attachment`, nosniff, SVG blocked (T1-01/02)
 - **Gate:** two-user E2E passes with `DEBUG=false`
 
-### Phase 1 — Infrastructure migration (Weeks 2–3)
+### Phase 1 — Infrastructure migration · ✅ **COMPLETE 2026-06-10** (revised scope: local-backend decision)
+> Neon live (PostgreSQL 17.10, 14 tables migrated via lifespan; asyncpg URL normalized);
+> API boots against Neon — health 200, anonymous 401 under DEBUG=false. Vercel via
+> authenticated CLI; frontend deploy deferred (hosted frontend can't reach a local
+> backend — frontend runs locally/Tauri). Dropped per owner decision: Fly/Railway,
+> Upstash, managed realtime, blob storage. Original spec below kept for history:
 - Neon: migrate schema via Alembic; pgvector enabled; branch-per-PR wired
 - Vercel: frontend off static-export/nginx onto native Next.js; env via Vercel project
 - API service to Fly/Railway; Upstash Redis for rate limiting (per-user keys on LLM routes — also the cost cap, T2-08)
@@ -168,7 +173,8 @@ Fallback: cloud unreachable → degrade to T0 + "local mode" badge (the privacy 
 - Files to Blob/S3 signed URLs
 - **Gate:** PR opens → full preview stack URL in the PR comment
 
-### Phase 2 — Multi-tenant product (Weeks 4–6)
+### Phase 2 — Multi-tenant product · ✅ backend **COMPLETE 2026-06-10** (325→354 suite)
+> Residual: signup/onboarding UI (needs Logto tenant).
 - `Workspace` + `WorkspaceMember(role)` model; scope channels/conversations/files/bots/meetings
 - Invite-by-email; signup → create-or-join onboarding
 - Membership enforced on every channel route + realtime join; bot ownership; token-derived identity in command-execute (T2-04..07)
@@ -176,14 +182,20 @@ Fallback: cloud unreachable → degrade to T0 + "local mode" badge (the privacy 
 - Remaining security P1s: SSRF IP-pinning, unfurl streaming cap, og:image validation, schema bounds, magic-byte sniff
 - **Gate:** GAP v2 §4 state-coverage suite fully green in CI
 
-### Phase 3 — Knowledge-graph memory + copilot (Weeks 6–9)
+### Phase 3 — Knowledge-graph memory + copilot · ✅ backend **COMPLETE 2026-06-10**
+> Done: graph_entities/graph_edges, fail-soft ModelRouter extraction on every message,
+> /graph search/neighbors/catch-me-up (membership-gated), copilot citations in /ai/chat.
+> Residual: frontend surfaces for citations/catch-me-up; meeting→graph wiring polish.
 - Product graph schema + T0 entity-tagging pipeline (§4.2)
 - Copilot v2: graph-RAG answers with citations; "catch me up" graph-delta; ClawShield PII scrub visible in UI before every cloud call
 - Meeting pipeline hardened (lowest coverage, 62%): record → Whisper → summary + action items <60s, action items land in the graph
 - Workspace-scoped full-text + semantic search (<500ms PRD target)
 - **Gate:** the 3-minute demo — invite → chat → copilot cites graph → meeting auto-summarized → action item tracked
 
-### Phase 4 — Consensus layer + benchmarks (Weeks 9–11, overlaps 3)
+### Phase 4 — Consensus layer + benchmarks · ✅ **COMPLETE 2026-06-10**
+> ModelRouter T0/T1/T2 + judge reconciliation, model_routes.json artifact, router-stats
+> endpoint, benchmarks/ harness with golden sets + --write regeneration. Live-verified
+> T0 against local Ollama (gemma-4b→gemma4:e2b, local_fraction 1.0).
 - ModelRouter service with T0/T1/T2 tiers + escalation policy (§5.1)
 - Benchmark harness + golden sets; generated `model_routes.json`; CI scorecard (§5.2)
 - Per-workspace token metering (feeds billing + the pricing page "70% local" claim)
