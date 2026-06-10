@@ -89,6 +89,7 @@ export interface CopilotMessage {
   content: string;
   timestamp: Date;
   ragChunksUsed?: number;
+  citations?: import("@/lib/api").GraphCitation[];
 }
 
 export interface ChatState {

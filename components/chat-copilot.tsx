@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CopilotMessage, ConversationSummary, ExtractedAction, Message } from "@/types/chat";
 import { copilotChat, summarizeConversation, extractActions, ApiMessage } from "@/lib/api";
+import { getStoredWorkspaceId } from "@/lib/useWorkspaces";
+import { CitationBadge } from "@/components/graph/CatchMeUp";
 
 interface ThreadSummaryCardProps {
   summary: ConversationSummary;
@@ -202,6 +204,7 @@ export function ChatCopilot({ conversationId, selectedModel, conversationMessage
       const res = await copilotChat({
         query: q,
         conversation_id: conversationId ?? undefined,
+        workspace_id: getStoredWorkspaceId() ?? undefined,
         model: selectedModel,
       });
       const assistantMsg: CopilotMessage = {
@@ -210,6 +213,7 @@ export function ChatCopilot({ conversationId, selectedModel, conversationMessage
         content: res.answer,
         timestamp: new Date(),
         ragChunksUsed: res.rag_chunks_used,
+        citations: res.citations,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
@@ -380,6 +384,18 @@ export function ChatCopilot({ conversationId, selectedModel, conversationMessage
                       <p className="mt-1 text-[10px] opacity-60">
                         {msg.ragChunksUsed} context chunks used
                       </p>
+                    )}
+                    {msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <p className="text-[10px] text-muted-foreground mb-1">
+                          Sources from your workspace graph
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {msg.citations.map((c, i) => (
+                            <CitationBadge key={`${c.kind}-${c.name}-${i}`} citation={c} />
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

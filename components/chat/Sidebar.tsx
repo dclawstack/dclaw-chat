@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Conversation } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { CatchMeUp } from "@/components/graph/CatchMeUp";
+import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
   Plus,
   MessageSquare,
@@ -10,6 +13,9 @@ import {
   FolderOpen,
   Settings,
   X,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -128,6 +134,9 @@ export function Sidebar({
           )}
         </ScrollArea>
 
+        {/* Workspace memory */}
+        <CatchMeUpSection />
+
         {/* Footer */}
         <div className="p-3 border-t">
           <Button
@@ -142,6 +151,58 @@ export function Sidebar({
         </div>
       </aside>
     </>
+  );
+}
+
+function CatchMeUpSection() {
+  const [expanded, setExpanded] = useState(false);
+  const { workspaces, currentId, setCurrent, isLoading } = useWorkspaces();
+
+  return (
+    <div className="border-t px-3 py-2">
+      <button
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+        <Sparkles className="h-3.5 w-3.5 text-dclaw-500" />
+        Catch me up
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {workspaces.length > 0 && (
+            <select
+              value={currentId ?? ""}
+              onChange={(e) => setCurrent(e.target.value || null)}
+              aria-label="Workspace"
+              className="w-full h-7 rounded-md border border-border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-dclaw-500"
+            >
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {currentId ? (
+            <CatchMeUp workspaceId={currentId} />
+          ) : (
+            <p className="px-2 text-xs text-muted-foreground leading-relaxed">
+              {isLoading
+                ? "Loading workspaces…"
+                : "Join a workspace to build your team's memory."}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

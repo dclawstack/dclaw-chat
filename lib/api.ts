@@ -130,8 +130,19 @@ export async function listModels(): Promise<ModelInfo[]> {
 export interface CopilotChatRequest {
   query: string;
   conversation_id?: string;
+  workspace_id?: string;
   model?: string;
   include_context?: boolean;
+}
+
+/** Knowledge-graph citation: an entity + a pointer back to its source. */
+export interface GraphCitation {
+  name: string;
+  kind: string;
+  summary?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  updated_at?: string | null;
 }
 
 export interface CopilotChatResponse {
@@ -139,6 +150,7 @@ export interface CopilotChatResponse {
   model: string;
   rag_chunks_used: number;
   context_snippets: string[];
+  citations?: GraphCitation[];
 }
 
 export interface SummarizeResponse {
@@ -493,4 +505,107 @@ export function buildHuddleWsUrl(roomId: string, _userId: string): string {
   // Identity comes from the verified token; the backend ignores user_id params.
   const q = wsAuthQuery();
   return `${wsBase}/huddles/${roomId}/ws${q ? `?${q}` : ""}`;
+}
+
+// ── Workspaces ────────────────────────────────────────────────────────────────
+
+export interface Workspace {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+  member_count: number;
+}
+
+export async function listWorkspaces(): Promise<Workspace[]> {
+  const res = await apiFetch(`${API_BASE}/workspaces`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Workspace Knowledge Graph ─────────────────────────────────────────────────
+
+export interface GraphEntity {
+  id: string;
+  workspace_id?: string | null;
+  kind: string;
+  name: string;
+  summary?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GraphEdge {
+  id: string;
+  workspace_id?: string | null;
+  src_id: string;
+  dst_id: string;
+  relation: string;
+  weight: number;
+  source_id?: string | null;
+  created_at: string;
+}
+
+export interface GraphNeighbors {
+  entity: GraphEntity;
+  entities: GraphEntity[];
+  edges: GraphEdge[];
+}
+
+export interface CatchMeUpResult {
+  workspace_id: string;
+  since?: string | null;
+  entities: GraphCitation[];
+  decisions: GraphCitation[];
+  action_items: GraphCitation[];
+  edges: GraphEdge[];
+}
+
+export async function searchGraphEntities(
+  workspaceId: string,
+  q?: string,
+  kind?: string
+): Promise<GraphEntity[]> {
+  const url = new URL(`${API_BASE}/graph/workspaces/${workspaceId}/entities`);
+  if (q) url.searchParams.set("q", q);
+  if (kind) url.searchParams.set("kind", kind);
+  const res = await apiFetch(url.toString());
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getEntityNeighbors(
+  workspaceId: string,
+  entityId: string
+): Promise<GraphNeighbors> {
+  const res = await apiFetch(
+    `${API_BASE}/graph/workspaces/${workspaceId}/entities/${entityId}/neighbors`
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getCatchMeUp(
+  workspaceId: string,
+  since?: string
+): Promise<CatchMeUpResult> {
+  const url = new URL(`${API_BASE}/graph/workspaces/${workspaceId}/catch-me-up`);
+  if (since) url.searchParams.set("since", since);
+  const res = await apiFetch(url.toString());
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
