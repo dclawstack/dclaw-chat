@@ -207,7 +207,12 @@ Fallback: cloud unreachable → degrade to T0 + "local mode" badge (the privacy 
 - Per-workspace token metering (feeds billing + the pricing page "70% local" claim)
 - **Gate:** ≥70% calls on T0 local at equal-or-better golden-set quality
 
-### Phase 5 — Monetization & launch (Weeks 11–14) → **v2.0**
+### Phase 5 — Monetization & launch · 🔧 scaffolding **COMPLETE 2026-06-10**, awaiting keys
+> Done: Stripe per-seat checkout (Owner/Admin-gated), signature-verified webhook with
+> full subscription lifecycle, workspace_billing model, plan gating helper, Upgrade UI.
+> All mocked-tested (suite 371). Remaining: STRIPE_SECRET_KEY + STRIPE_PRICE_PRO +
+> webhook secret (config-only), Clerk keys for live signup, then the end-to-end
+> stranger→signup→invite→chat→cited-answer→pay demo run = **v2.0**.
 - Stripe per-seat: Free (capped AI, 1 workspace) / Pro (consensus tier, unlimited graph memory) / Enterprise (on-prem Helm path, SSO)
 - Self-serve funnel instrumented (PostHog): signup → invite → activation → retention curves
 - Security page + the gap-analysis lineage as diligence collateral; `dclaw-manifest.json`
