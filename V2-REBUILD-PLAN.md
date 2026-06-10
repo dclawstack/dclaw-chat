@@ -30,10 +30,10 @@ embeds (P2 of the old PRD) are frozen.
 |---|---|---|---|
 | Frontend | Next.js static export + nginx container | **Next.js on Vercel** (App Router, server components, streaming) | Git-push deploys, preview URLs, edge network, drops nginx/CSP hand-rolling |
 | Database | Postgres container / CloudNativePG | **Neon serverless Postgres** + pgvector | Branch-per-PR preview DBs, scale-to-zero, no DB ops |
-| API | FastAPI on K8s | **FastAPI (single small service)** on Fly.io/Railway, Neon-backed | Keep the 53-file backend; serverless Postgres removes the ops burden; Vercel can't host long-lived Python/WS |
-| Realtime (WS) | Per-process dict managers (broken at >1 pod, GAP T3-01) | **Managed realtime** (Ably / PartyKit / Pusher) for channels, presence, signaling | Deletes the entire Redis-backplane problem class instead of solving it |
-| Rate limit / cache | None deployed (GAP T3-02/07) | **Upstash Redis** (serverless) | Shared counters with zero ops |
-| Files | Local `uploads/` dir | **Vercel Blob or S3/R2** with signed URLs | Kills the unauthenticated-serve + XSS class (T1-01/02) by design |
+| API | FastAPI on K8s | **FastAPI runs LOCALLY** (owner decision 2026-06-10: no cloud backend hosting; uvicorn/docker compose on the user's machine), Neon-backed | Local-first is the product thesis — the backend lives where the data and Ollama live; remote users reach it via a tunnel (cloudflared/Tailscale) if ever needed |
+| Realtime (WS) | Per-process dict managers (broken at >1 pod, GAP T3-01) | **In-process managers are now CORRECT** — a single local backend instance has no multi-pod problem; T3-01/02 are moot for this deployment shape | Backplane only revisited if a hosted multi-instance path returns |
+| Rate limit / cache | None deployed (GAP T3-02/07) | Per-process slowapi limits (single instance = accurate); local Redis optional | No Upstash needed |
+| Files | Local `uploads/` dir | **Local disk stays** — serve route is now authed + attachment/nosniff (Phase 0) | Blob storage only if a hosted path returns |
 | Auth | Logto (backend-only; frontend sends nothing, T3-08) | **Logto end-to-end** (or Clerk if velocity wins) | Working login is a v2.0 gate |
 | Deploy | docker compose / Helm | **Git deployment**: push → Vercel preview (frontend) + Neon branch (DB) + Fly preview (API); merge → prod | Every PR is a full running stack |
 
@@ -206,11 +206,11 @@ Fallback: cloud unreachable → degrade to T0 + "local mode" badge (the privacy 
 |---|---|---|---|---|---|
 | 1 | GitHub access (`gh auth login` or PAT) | push branches/PRs to `dclawstack/dclaw-chat`, Actions secrets | `repo`, `workflow` | 0 | local keychain |
 | 2 | Neon API key + project `DATABASE_URL` | schema migration, branch-per-PR | project admin | 1 | `.env`, GH secrets |
-| 3 | Vercel token + org/project ID | frontend deploys, env management | project deploy | 1 | GH secrets |
-| 4 | Fly.io/Railway token | API service deploys | app deploy | 1 | GH secrets |
-| 5 | Upstash Redis URL + token | rate limiting, cache | db read/write | 1 | API env |
-| 6 | Ably/PartyKit/Pusher keys | managed realtime | app keys | 1 | API + frontend env |
-| 7 | Blob/S3/R2 bucket + keys | file storage, signed URLs | bucket RW | 1 | API env |
+| 3 | Vercel — ✅ **via CLI** (logged in as `tharuni-01`, owner decision: no token) | frontend deploys via `vercel` CLI | CLI session | 1 | local keychain |
+| 4 | ~~Fly.io/Railway token~~ | **DROPPED** — backend runs locally (owner decision 2026-06-10) | — | — | — |
+| 5 | ~~Upstash Redis~~ | **DROPPED** — single local instance, per-process limits accurate | — | — | — |
+| 6 | ~~Managed realtime keys~~ | **DROPPED** — in-process WS managers correct for one instance | — | — | — |
+| 7 | ~~Blob storage~~ | **DROPPED** — local disk + authed serve route | — | — | — |
 | 8 | Logto tenant (endpoint, app ID/secret, JWKS URL, audience, issuer) | end-to-end auth | one app config | 0 | frontend + API env |
 | 9 | OpenRouter API key | T1/T2 cloud models | standard | 0 (exists in `.env.example` slot) | API env |
 | 10 | NVIDIA NIM key | DeepSeek tier (optional) | standard | 4 | API env |

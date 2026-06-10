@@ -1,0 +1,25 @@
+{
+  "classify": {
+    "tier": "T0",
+    "model": "gemma-4b",
+    "max_tokens": 300
+  },
+  "summarize": {
+    "tier": "T1",
+    "model": "gemma-4b",
+    "fallback": "kimi-k2.5",
+    "max_tokens": 2000
+  },
+  "extract_actions": {
+    "tier": "T2",
+    "models": ["gemma-4b", "kimi-k2.5"],
+    "judge": "kimi-k2.5",
+    "max_tokens": 2000
+  },
+  "chat": {
+    "tier": "T1",
+    "model": "gemma-4b",
+    "fallback": "kimi-k2.5",
+    "max_tokens": 2000
+  }
+}

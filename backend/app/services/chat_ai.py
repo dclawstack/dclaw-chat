@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.message_repo import MessageRepository
 from app.repositories.conversation_repo import ConversationRepository
+from app.repositories.graph_repo import GraphRepository
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
 from app.schemas.chat import Message
 from app.schemas.ai import (
@@ -15,11 +16,19 @@ from app.schemas.ai import (
     ActionsRequest,
     ActionsResponse,
     ExtractedAction,
+    Citation,
 )
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = next(iter(OLLAMA_MODELS.values()), "gemma4:latest")
+
+#: Words too generic to be useful as knowledge-graph search terms.
+_STOPWORDS = {
+    "the", "and", "for", "with", "that", "this", "what", "who", "how",
+    "why", "where", "when", "about", "are", "was", "you", "can", "does",
+    "did", "have", "has", "any", "all", "our", "your", "tell",
+}
 
 
 def _score_relevance(query: str, text: str) -> float:
@@ -61,6 +70,39 @@ class ChatAIService:
     async def _get_messages(self, conversation_id: str):
         return await self.msg_repo.list_by_conversation(conversation_id, limit=200)
 
+    async def _graph_citations(
+        self, workspace_id: str, query: str, limit: int = 5
+    ) -> List[Citation]:
+        """Match terms from the user's question against the workspace
+        knowledge graph and return entity citations. Fail-soft: any error
+        yields no citations rather than a failed answer."""
+        terms = [
+            t
+            for t in re.findall(r"\w+", query.lower())
+            if len(t) > 2 and t not in _STOPWORDS
+        ][:8]
+        seen: dict[str, Citation] = {}
+        try:
+            repo = GraphRepository(self.db)
+            for term in terms:
+                for entity in await repo.search_entities(
+                    workspace_id, term, limit=limit
+                ):
+                    seen.setdefault(
+                        entity.id,
+                        Citation(
+                            name=entity.name,
+                            kind=entity.kind,
+                            source_type=entity.source_type,
+                            source_id=entity.source_id,
+                        ),
+                    )
+                if len(seen) >= limit:
+                    break
+        except Exception as e:
+            logger.warning(f"Graph citation lookup failed: {e}")
+        return list(seen.values())[:limit]
+
     async def chat(self, req: AIChatRequest) -> AIChatResponse:
         """Copilot chat — RAG over conversation history, then LLM answer."""
         ollama_model = self._pick_model(req.model)
@@ -94,11 +136,16 @@ class ChatAIService:
         )
         content = await self.ollama.chat(ollama_model, messages)
 
+        citations: List[Citation] = []
+        if req.workspace_id:
+            citations = await self._graph_citations(req.workspace_id, req.query)
+
         return AIChatResponse(
             answer=content,
             model=ollama_model,
             rag_chunks_used=len(context_snippets),
             context_snippets=context_snippets if req.include_context else [],
+            citations=citations,
         )
 
     async def summarize(self, req: SummarizeRequest) -> SummarizeResponse:

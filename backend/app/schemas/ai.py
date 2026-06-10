@@ -5,8 +5,18 @@ from pydantic import BaseModel, Field
 class AIChatRequest(BaseModel):
     query: str
     conversation_id: Optional[str] = None
+    workspace_id: Optional[str] = None  # enables knowledge-graph citations
     model: Optional[str] = "gemma-4b"
     include_context: bool = False
+
+
+class Citation(BaseModel):
+    """Knowledge-graph citation: an entity + a pointer to its source."""
+
+    name: str
+    kind: str
+    source_type: Optional[str] = None
+    source_id: Optional[str] = None
 
 
 class AIChatResponse(BaseModel):
@@ -14,6 +24,7 @@ class AIChatResponse(BaseModel):
     model: str
     rag_chunks_used: int
     context_snippets: List[str] = []
+    citations: List[Citation] = []
 
 
 class InlineMessage(BaseModel):

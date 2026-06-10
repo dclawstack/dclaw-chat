@@ -12,6 +12,7 @@ from app.repositories.meeting_repo import MeetingRepository
 from app.schemas.meeting import MeetingActionItem
 from app.schemas.chat import Message
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
+from app.services.model_router import router as model_router
 from app.services.files import FileService, UPLOAD_DIR
 
 settings = get_settings()
@@ -116,7 +117,18 @@ class MeetingService:
             f"--- TRANSCRIPT ---\n{truncated}\n---\n\nSummary:"
         )
         summary_messages = [Message(role="user", content=summary_prompt)]
-        summary_text = await self.ollama.chat(model, summary_messages, temperature=0.3)
+        try:
+            # Route through the consensus/model-routing layer (T1: local with
+            # cloud fallback). model_override keeps honoring the caller's pick.
+            result = await model_router.run(
+                "summarize", summary_messages, temperature=0.3, model_override=model
+            )
+            summary_text = result.content
+        except Exception as e:
+            # Preserve the pre-router behavior: fall back to a direct local
+            # call; if that also fails the exception propagates as before.
+            logger.warning(f"Model router summarize failed, using direct Ollama: {e}")
+            summary_text = await self.ollama.chat(model, summary_messages, temperature=0.3)
 
         actions_prompt = (
             "Extract all actionable items from this meeting transcript. "

@@ -8,10 +8,14 @@ node_modules/
 dist/
 out/
 
-# Environment
+# Environment (and editor swap copies of it — a .env.swp once carried a real
+# API key into a commit; GitHub push protection caught it)
 .env
 .env.local
 .env.*.local
+*.swp
+*.swo
+*~
 
 # IDE
 .vscode/

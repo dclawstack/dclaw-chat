@@ -1,0 +1,12 @@
+{"input": "The login button is misaligned on mobile — the tailwind flex classes on the header component need fixing before the demo.", "expected": "frontend"}
+{"input": "Can someone review my PR? I refactored the conversations endpoint to use the new repository pattern and added a schema for the query params.", "expected": "backend"}
+{"input": "The helm chart is still pointing at the old image tag, so the k8s deploy keeps rolling back. I'll patch the pipeline this afternoon.", "expected": "devops"}
+{"input": "Posted the new figma mockup for the settings page — please check the typography and spacing before I hand it off.", "expected": "design"}
+{"input": "Getting a 500 with a traceback in the meetings service whenever the transcript is empty. Looks like a null check is missing.", "expected": "bug"}
+{"input": "We should add support for pinned messages in channels — it keeps coming up in user feedback and would be a quick win to implement.", "expected": "feature"}
+{"input": "Does anyone know how the websocket auth handshake works? Where does the token get verified?", "expected": "question"}
+{"input": "Standup moved to 10:30 today, see you all there.", "expected": "general"}
+{"input": "The docker build fails in CI on the nginx stage — I think the base image changed. Checking the github actions logs now.", "expected": "devops"}
+{"input": "App crashes with an undefined error when you open a thread with zero replies. Repro steps in the ticket, it's broken on main.", "expected": "bug"}
+{"input": "New color palette and icon set are ready in figma, the prototype link is in the design channel.", "expected": "design"}
+{"input": "Why does the api return 404 for archived conversations? Is that intentional or should I file something?", "expected": "question"}

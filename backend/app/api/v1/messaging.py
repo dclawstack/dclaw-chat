@@ -21,6 +21,7 @@ from app.services.messaging import manager
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
 from app.services.files import file_service, extract_urls, INLINE_SAFE_MIMES
 from app.services.command_parser import parse_command, execute_command
+from app.services.graph_service import GraphService
 from app.schemas.chat import Message as ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -220,7 +221,7 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    await _require_channel_access(db, channel_id, user)
+    channel = await _require_channel_access(db, channel_id, user)
     msg = ChannelMessageORM(
         id=str(uuid.uuid4()),
         channel_id=channel_id,
@@ -242,6 +243,12 @@ async def send_message(
     await db.commit()
     await db.refresh(msg)
     await manager.broadcast(channel_id, _msg_to_dict(msg))
+    # Fire-and-forget knowledge-graph indexing — must never block or break send.
+    asyncio.create_task(
+        _index_message_into_graph(
+            channel.workspace_id if channel else None, _msg_to_dict(msg)
+        )
+    )
     return msg
 
 
@@ -397,6 +404,23 @@ def _msg_to_dict(m: ChannelMessageORM) -> dict:
         "attachments": json.loads(m.attachments) if m.attachments else [],
         "created_at": m.created_at.isoformat(),
     }
+
+
+async def _index_message_into_graph(
+    workspace_id: Optional[str], msg_dict: dict
+) -> None:
+    """Fire-and-forget knowledge-graph extraction for one message.
+
+    Opens its own session (the request's session is long gone) and swallows
+    every error: graph indexing must never break message sending.
+    """
+    try:
+        async with async_session() as db:
+            await GraphService.extract_from_message(db, workspace_id, msg_dict)
+    except Exception as e:
+        logger.warning(
+            f"Graph extraction failed for message {msg_dict.get('id')}: {e}"
+        )
 
 
 AI_USER_ID = "dclaw-copilot"
@@ -629,6 +653,14 @@ async def websocket_endpoint(
                     recent_history = list(hist_result.scalars().all())
 
                 await manager.broadcast(channel_id, _msg_to_dict(msg))
+
+                # Knowledge-graph indexing (channel loaded at join time).
+                asyncio.create_task(
+                    _index_message_into_graph(
+                        channel.workspace_id if channel else None,
+                        _msg_to_dict(msg),
+                    )
+                )
 
                 manager.clear_typing(channel_id, user_id)
                 await manager.broadcast(channel_id, {
