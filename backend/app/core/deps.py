@@ -24,31 +24,37 @@ def _jwks_client(jwks_url: str) -> PyJWKClient:
 def decode_token(token: str) -> dict:
     """Decode and **verify** a JWT, returning its claims.
 
-    Production (``LOGTO_JWKS_URL`` configured): the RS256 signature is verified
-    against Logto's JWKS, together with ``exp`` and — when configured —
-    ``aud``/``iss``. Any failure raises ``jwt.InvalidTokenError``.
+    Production (JWKS configured via ``AUTH_JWKS_URL``, falling back to the
+    legacy ``LOGTO_JWKS_URL``): the RS256 signature is verified against the
+    IdP's JWKS (works for Clerk, Logto, or any RS256 issuer), together with
+    ``exp`` and — when configured — ``aud``/``iss``. Any failure raises
+    ``jwt.InvalidTokenError``.
 
     Dev/scaffold (``DEBUG`` true and no JWKS configured): signature verification
     is skipped so local development works without a real IdP. This path is never
     reached in production because ``DEBUG`` defaults to ``False`` and, absent a
     JWKS URL, unverified tokens are rejected outright.
     """
-    if settings.LOGTO_JWKS_URL:
+    jwks_url = settings.auth_jwks_url
+    audience = settings.auth_audience
+    issuer = settings.auth_issuer
+
+    if jwks_url:
         try:
-            signing_key = _jwks_client(settings.LOGTO_JWKS_URL).get_signing_key_from_jwt(token)
+            signing_key = _jwks_client(jwks_url).get_signing_key_from_jwt(token)
         except PyJWKClientError as e:
             raise jwt.InvalidTokenError(f"Unable to resolve signing key: {e}") from e
         return jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=settings.LOGTO_AUDIENCE or None,
-            issuer=settings.LOGTO_ISSUER or None,
+            audience=audience or None,
+            issuer=issuer or None,
             options={
                 "verify_signature": True,
                 "verify_exp": True,
-                "verify_aud": bool(settings.LOGTO_AUDIENCE),
-                "verify_iss": bool(settings.LOGTO_ISSUER),
+                "verify_aud": bool(audience),
+                "verify_iss": bool(issuer),
             },
         )
 
@@ -57,11 +63,12 @@ def decode_token(token: str) -> dict:
             token,
             options={"verify_signature": False, "verify_exp": True},
             algorithms=["HS256", "RS256"],
-            audience=settings.LOGTO_AUDIENCE or None,
+            audience=audience or None,
         )
 
     raise jwt.InvalidTokenError(
-        "JWT signature cannot be verified: LOGTO_JWKS_URL is not configured"
+        "JWT signature cannot be verified: AUTH_JWKS_URL (or legacy LOGTO_JWKS_URL) "
+        "is not configured"
     )
 
 

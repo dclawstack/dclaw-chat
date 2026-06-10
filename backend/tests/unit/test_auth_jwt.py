@@ -93,6 +93,82 @@ def test_prod_without_jwks_rejects_everything(monkeypatch):
         deps.decode_token(forged)
 
 
+# ── Provider-neutral AUTH_* settings (Clerk or any RS256/JWKS IdP) ───────────
+
+def test_auth_jwks_url_works_without_any_logto_settings(monkeypatch, rsa_keypair):
+    """AUTH_JWKS_URL alone (no LOGTO_* at all) enables full RS256 verification."""
+    private_key, public_key = rsa_keypair
+    _set(monkeypatch,
+         AUTH_JWKS_URL="https://my-app.clerk.accounts.dev/.well-known/jwks.json",
+         AUTH_AUDIENCE="", AUTH_ISSUER="",
+         LOGTO_JWKS_URL="", LOGTO_AUDIENCE="", LOGTO_ISSUER="", DEBUG=False)
+    _fake_jwks(monkeypatch, public_key)
+
+    token = jwt.encode({"sub": "clerk-user-1"}, private_key, algorithm="RS256")
+    claims = deps.decode_token(token)
+    assert claims["sub"] == "clerk-user-1"
+
+    # …and signature verification is actually enforced on this path.
+    attacker_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    forged = jwt.encode({"sub": "victim", "role": "Owner"}, attacker_key, algorithm="RS256")
+    with pytest.raises(jwt.InvalidTokenError):
+        deps.decode_token(forged)
+
+
+def test_auth_issuer_enforced_when_configured(monkeypatch, rsa_keypair):
+    private_key, public_key = rsa_keypair
+    _set(monkeypatch,
+         AUTH_JWKS_URL="https://my-app.clerk.accounts.dev/.well-known/jwks.json",
+         AUTH_AUDIENCE="", AUTH_ISSUER="https://my-app.clerk.accounts.dev",
+         LOGTO_JWKS_URL="", LOGTO_AUDIENCE="", LOGTO_ISSUER="", DEBUG=False)
+    _fake_jwks(monkeypatch, public_key)
+
+    wrong_iss = jwt.encode(
+        {"sub": "user-1", "iss": "https://evil.example"}, private_key, algorithm="RS256"
+    )
+    with pytest.raises(jwt.InvalidTokenError):
+        deps.decode_token(wrong_iss)
+
+    ok = jwt.encode(
+        {"sub": "user-1", "iss": "https://my-app.clerk.accounts.dev"},
+        private_key, algorithm="RS256",
+    )
+    assert deps.decode_token(ok)["sub"] == "user-1"
+
+
+def test_logto_fallback_still_verifies_when_auth_unset(monkeypatch, rsa_keypair):
+    """Legacy LOGTO_* values keep working when no AUTH_* is configured."""
+    private_key, public_key = rsa_keypair
+    _set(monkeypatch,
+         AUTH_JWKS_URL="", AUTH_AUDIENCE="", AUTH_ISSUER="",
+         LOGTO_JWKS_URL="https://idp.example/jwks",
+         LOGTO_AUDIENCE="", LOGTO_ISSUER="", DEBUG=False)
+    _fake_jwks(monkeypatch, public_key)
+
+    token = jwt.encode({"sub": "legacy-user"}, private_key, algorithm="RS256")
+    assert deps.decode_token(token)["sub"] == "legacy-user"
+
+
+def test_auth_settings_take_precedence_over_logto(monkeypatch):
+    _set(monkeypatch,
+         AUTH_JWKS_URL="https://new.example/jwks",
+         AUTH_ISSUER="https://new.example",
+         AUTH_AUDIENCE="new-aud",
+         LOGTO_JWKS_URL="https://old.example/jwks",
+         LOGTO_ISSUER="https://old.example",
+         LOGTO_AUDIENCE="old-aud")
+    assert deps.settings.auth_jwks_url == "https://new.example/jwks"
+    assert deps.settings.auth_issuer == "https://new.example"
+    assert deps.settings.auth_audience == "new-aud"
+
+
+def test_prod_without_any_jwks_rejects_everything(monkeypatch):
+    _set(monkeypatch, AUTH_JWKS_URL="", LOGTO_JWKS_URL="", DEBUG=False)
+    forged = jwt.encode({"sub": "victim", "role": "Owner"}, "anything", algorithm="HS256")
+    with pytest.raises(jwt.InvalidTokenError):
+        deps.decode_token(forged)
+
+
 # ── DEBUG / dev: unsigned tokens allowed for local development ───────────────
 
 def test_debug_mode_accepts_unsigned_token(monkeypatch):

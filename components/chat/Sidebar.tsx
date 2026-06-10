@@ -5,6 +5,7 @@ import { Conversation } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CatchMeUp } from "@/components/graph/CatchMeUp";
+import { AuthUserButton } from "@/components/auth/UserButton";
 import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
   Plus,
@@ -138,16 +139,17 @@ export function Sidebar({
         <CatchMeUpSection />
 
         {/* Footer */}
-        <div className="p-3 border-t">
+        <div className="p-3 border-t flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={onOpenSettings}
-            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+            className="flex-1 justify-start gap-2 text-muted-foreground hover:text-foreground"
           >
             <Settings className="h-4 w-4" />
             Settings
           </Button>
+          <AuthUserButton />
         </div>
       </aside>
     </>

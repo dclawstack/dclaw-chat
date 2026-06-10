@@ -40,11 +40,32 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_chat"
 
-    # Auth (Logto)
+    # Auth — provider-neutral (Clerk, Logto, or any RS256/JWKS IdP).
+    # Prefer AUTH_*; the legacy LOGTO_* values below act as fallbacks.
+    AUTH_JWKS_URL: str = ""
+    AUTH_ISSUER: str = ""
+    AUTH_AUDIENCE: str = ""
+
+    # Auth (Logto) — legacy aliases kept so existing deployments keep working.
     LOGTO_ENDPOINT: str = ""
     LOGTO_AUDIENCE: str = ""
     LOGTO_ISSUER: str = ""
     LOGTO_JWKS_URL: str = ""
+
+    @property
+    def auth_jwks_url(self) -> str:
+        """Resolved JWKS URL: AUTH_JWKS_URL, falling back to LOGTO_JWKS_URL."""
+        return self.AUTH_JWKS_URL or self.LOGTO_JWKS_URL
+
+    @property
+    def auth_issuer(self) -> str:
+        """Resolved issuer: AUTH_ISSUER, falling back to LOGTO_ISSUER."""
+        return self.AUTH_ISSUER or self.LOGTO_ISSUER
+
+    @property
+    def auth_audience(self) -> str:
+        """Resolved audience: AUTH_AUDIENCE, falling back to LOGTO_AUDIENCE."""
+        return self.AUTH_AUDIENCE or self.LOGTO_AUDIENCE
 
     # AI
     OLLAMA_URL: str = "http://localhost:11434"
