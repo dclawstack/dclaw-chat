@@ -78,7 +78,7 @@ export function MeetingsTab() {
           <Button size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()} className="text-xs">
             {uploading ? "Uploading…" : "+ Upload"}
           </Button>
-          <input ref={fileInputRef} type="file" accept="audio/*,video/*" className="hidden" onChange={handleFileChange} />
+          <input ref={fileInputRef} type="file" accept="audio/*,video/*" className="hidden" onChange={handleFileChange} aria-label="Upload meeting recording" />
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {loadError && <p className="px-2 py-3 text-xs text-red-400">{loadError}</p>}

@@ -83,7 +83,7 @@ export function HuddleList({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold">Huddles</h2>
-          <p className="text-xs text-gray-400">Quick audio rooms — no scheduling needed</p>
+          <p className="text-xs text-gray-600">Quick audio rooms — no scheduling needed</p>
         </div>
       </div>
 
@@ -148,7 +148,7 @@ function HuddleRoomCard({
     <div className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-4 py-3 hover:border-gray-600 transition-colors">
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className="text-sm font-medium truncate">{room.name}</span>
-        <div className="flex items-center gap-3 text-xs text-gray-400">
+        <div className="flex items-center gap-3 text-xs text-gray-600">
           <span className="flex items-center gap-1">
             <Users className="w-3 h-3" />
             {room.participants.length}
@@ -168,7 +168,7 @@ function HuddleRoomCard({
                 className={`text-xs px-1.5 py-0.5 rounded-full ${
                   p.is_speaking && !p.is_muted
                     ? "bg-green-900/50 text-green-300 ring-1 ring-green-500"
-                    : "bg-gray-800 text-gray-400"
+                    : "bg-gray-800 text-gray-600"
                 }`}
               >
                 {p.display_name}

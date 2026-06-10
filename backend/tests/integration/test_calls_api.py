@@ -66,6 +66,21 @@ async def test_delete_call_room(client):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("participants", [0, -5, 501])
+async def test_create_room_rejects_out_of_range_participants(client, participants):
+    response = await client.post(
+        "/api/v1/calls", json={"title": "Bad", "max_participants": participants}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_room_rejects_oversized_title(client):
+    response = await client.post("/api/v1/calls", json={"title": "x" * 256})
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_ended_rooms_excluded_from_list(client):
     active = await client.post("/api/v1/calls", json={"title": "Active"})
     ended = await client.post("/api/v1/calls", json={"title": "Ended"})

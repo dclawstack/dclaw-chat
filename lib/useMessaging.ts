@@ -2,17 +2,20 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ChannelMessage, MessageAttachment } from "@/types/chat";
+import { wsAuthQuery } from "@/lib/auth";
 
 const _apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 const WS_BASE = _apiBase.replace(/^http/, "ws").replace(/\/api\/v1\/?$/, "/api/v1/messaging/ws");
 
 interface UseMessagingOptions {
   channelId: string | null;
+  /** Unused: identity now comes from the verified auth token (see lib/auth.ts). */
   userId?: string;
+  /** Unused: identity now comes from the verified auth token (see lib/auth.ts). */
   userName?: string;
 }
 
-export function useMessaging({ channelId, userId = "dev-user", userName = "You" }: UseMessagingOptions) {
+export function useMessaging({ channelId }: UseMessagingOptions) {
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
@@ -24,7 +27,8 @@ export function useMessaging({ channelId, userId = "dev-user", userName = "You" 
     if (wsRef.current) {
       wsRef.current.close();
     }
-    const url = `${WS_BASE}/${chId}?user_id=${encodeURIComponent(userId)}&user_name=${encodeURIComponent(userName)}`;
+    const q = wsAuthQuery();
+    const url = `${WS_BASE}/${chId}${q ? `?${q}` : ""}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => setConnected(true);
@@ -55,7 +59,7 @@ export function useMessaging({ channelId, userId = "dev-user", userName = "You" 
     };
 
     wsRef.current = ws;
-  }, [userId, userName]);
+  }, []);
 
   useEffect(() => {
     if (!channelId) return;

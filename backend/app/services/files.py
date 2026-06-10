@@ -3,10 +3,11 @@ import uuid
 import mimetypes
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
-import httpx
 from fastapi import HTTPException
+
+from app.core.ssrf import is_blocked_ip, safe_async_client
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -15,8 +16,19 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 
+# Unfurl hardening: bound the URL itself, only fetch HTML, and never read more
+# than 64 KiB of the response body (enough for <head> metadata).
+MAX_UNFURL_URL_LENGTH = 2048
+MAX_UNFURL_BYTES = 64 * 1024
+UNFURL_HTML_TYPES = ("text/html", "application/xhtml+xml")
+
 IMAGE_MIMES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"}
 VIDEO_MIMES = {"video/mp4", "video/webm", "video/ogg"}
+
+# Types that may be declared with their real media type when served. SVG is
+# excluded: it can carry executable <script> and must never render on the API
+# origin. Everything else is forced to application/octet-stream.
+INLINE_SAFE_MIMES = (IMAGE_MIMES - {"image/svg+xml"}) | VIDEO_MIMES
 
 _OG_RE = re.compile(
     r'<meta[^>]+(?:property|name)=["\'](?:og:|twitter:)?(\w+)["\'][^>]+content=["\']([^"\']*)["\']',
@@ -32,6 +44,28 @@ _URL_RE = re.compile(r'https?://[^\s"\'<>]+', re.IGNORECASE)
 
 def extract_urls(text: str) -> list[str]:
     return _URL_RE.findall(text)
+
+
+def _safe_preview_url(candidate: str, page_url: str) -> str:
+    """Validate an extracted og:image/favicon URL for client-side rendering.
+
+    Relative URLs are resolved against *page_url*. The result must be an
+    absolute http(s) URL (rejects javascript:, data:, etc.) whose host is not
+    an internal/blocked IP literal; otherwise return "" so the field is
+    dropped from the unfurl result.
+    """
+    if not candidate:
+        return ""
+    try:
+        resolved = urljoin(page_url, candidate.strip())
+        parsed = urlparse(resolved)
+    except ValueError:
+        return ""
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return ""
+    if is_blocked_ip(parsed.hostname):
+        return ""
+    return resolved
 
 
 class FileService:
@@ -70,8 +104,13 @@ class FileService:
         }
 
     def file_path(self, file_id: str, filename: str) -> Optional[Path]:
-        p = UPLOAD_DIR / file_id / filename
-        return p if p.exists() else None
+        base = UPLOAD_DIR.resolve()
+        target = (base / file_id / filename).resolve()
+        # Reject any path that escapes the upload base dir (e.g. '..' traversal
+        # or absolute components in file_id / filename).
+        if not target.is_relative_to(base):
+            return None
+        return target if target.exists() else None
 
     def extract_text(self, file_id: str, filename: str, mime_type: str) -> str:
         """Extract readable text from an uploaded file for AI context (max 8 000 chars)."""
@@ -97,12 +136,28 @@ class FileService:
 
     async def unfurl(self, url: str) -> dict:
         base = {"type": "link", "url": url, "title": url, "description": "", "image": "", "favicon": ""}
+        if len(url) > MAX_UNFURL_URL_LENGTH or not url.startswith(("http://", "https://")):
+            return base
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                resp = await client.get(url, headers={"User-Agent": "DClaw-Unfurler/1.0"})
-                if "text/html" not in resp.headers.get("content-type", ""):
-                    return base
-                html = resp.text[:60_000]
+            # safe_async_client pins the DNS resolution (SSRF guard) and keeps
+            # redirects disabled; stream so we can reject by headers before
+            # reading the body, and never buffer more than MAX_UNFURL_BYTES.
+            async with safe_async_client(timeout=5.0) as client:
+                async with client.stream(
+                    "GET", url, headers={"User-Agent": "DClaw-Unfurler/1.0"}
+                ) as resp:
+                    ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+                    if ctype not in UNFURL_HTML_TYPES:
+                        return base
+                    clen = resp.headers.get("content-length", "")
+                    if clen.isdigit() and int(clen) > MAX_UNFURL_BYTES:
+                        return base
+                    received = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        received += chunk
+                        if len(received) >= MAX_UNFURL_BYTES:
+                            break  # cap reached — abort the download
+                html = bytes(received[:MAX_UNFURL_BYTES]).decode("utf-8", errors="replace")
         except Exception:
             return base
 
@@ -115,21 +170,15 @@ class FileService:
         title_m = _TITLE_RE.search(html)
         title = og.get("title") or (title_m.group(1).strip() if title_m else url)
 
-        favicon = ""
         fav_m = _FAVICON_RE.search(html)
-        if fav_m:
-            fav = fav_m.group(1)
-            if fav.startswith("/"):
-                parsed = urlparse(url)
-                fav = f"{parsed.scheme}://{parsed.netloc}{fav}"
-            favicon = fav
+        favicon = _safe_preview_url(fav_m.group(1) if fav_m else "", url)
 
         return {
             "type": "link",
             "url": url,
             "title": title,
             "description": og.get("description", ""),
-            "image": og.get("image", ""),
+            "image": _safe_preview_url(og.get("image", ""), url),
             "favicon": favicon,
         }
 

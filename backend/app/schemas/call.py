@@ -1,12 +1,13 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CallRoomCreate(BaseModel):
-    title: str = "New Call"
-    channel_id: Optional[str] = None
-    max_participants: int = 50
+    title: str = Field("New Call", max_length=255)
+    channel_id: Optional[str] = Field(None, max_length=255)
+    workspace_id: Optional[str] = Field(None, max_length=36)
+    max_participants: int = Field(50, ge=1, le=500)
     recording_enabled: bool = False
 
 
@@ -17,6 +18,7 @@ class CallRoomOut(BaseModel):
     title: str
     host_id: Optional[str] = None
     channel_id: Optional[str] = None
+    workspace_id: Optional[str] = None
     status: str
     max_participants: int
     recording_enabled: bool

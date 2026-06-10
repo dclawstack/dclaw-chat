@@ -46,8 +46,17 @@ export function Sidebar({
       {/* Mobile overlay */}
       {isOpen && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close sidebar"
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={onClose}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onClose();
+            }
+          }}
         />
       )}
 
@@ -149,12 +158,20 @@ function ConversationItem({
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
         isActive
           ? "bg-dclaw-100 text-dclaw-900"
           : "hover:bg-accent text-foreground"
       }`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <MessageSquare className="h-4 w-4 shrink-0" />
       <span className="flex-1 truncate">{conversation.title}</span>

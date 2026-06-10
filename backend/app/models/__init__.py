@@ -5,5 +5,6 @@ from app.models.meeting import MeetingORM
 from app.models.bot import BotORM
 from app.models.call import CallRoomORM
 from app.models.huddle import HuddleRoomORM, HuddleParticipantORM
+from app.models.workspace import WorkspaceORM, WorkspaceMemberORM, WorkspaceInviteORM
 
-__all__ = ["ConversationORM", "MessageORM", "ChannelORM", "ChannelMessageORM", "MeetingORM", "BotORM", "CallRoomORM", "HuddleRoomORM", "HuddleParticipantORM"]
+__all__ = ["ConversationORM", "MessageORM", "ChannelORM", "ChannelMessageORM", "MeetingORM", "BotORM", "CallRoomORM", "HuddleRoomORM", "HuddleParticipantORM", "WorkspaceORM", "WorkspaceMemberORM", "WorkspaceInviteORM"]

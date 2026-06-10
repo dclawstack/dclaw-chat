@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { TopicBadge } from "./TopicBadge";
 import { Hash, Plus, Send, Wifi, WifiOff, Loader2, Tag, X, Paperclip, Images, Trash2 } from "lucide-react";
 import { StartCallButton } from "@/components/calls/StartCallButton";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 const USER_ID = "dev-user";
@@ -116,7 +117,7 @@ function TopicsPanel({ topics, activeTopic, onSelect, onDelete }: TopicsPanelPro
           <Tag className="h-3 w-3" />Topics
         </span>
         {activeTopic && (
-          <button onClick={() => onSelect(null)} className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => onSelect(null)} aria-label="Clear topic filter" className="text-muted-foreground hover:text-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         )}
@@ -180,7 +181,7 @@ export function MessagingView() {
   useEffect(() => { setActiveTopic(null); setHiddenTopics(new Set()); }, [activeChannelId]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/messaging/channels`)
+    apiFetch(`${API_BASE}/messaging/channels`)
       .then((r) => r.json())
       .then((data: Channel[]) => {
         setChannels(data);
@@ -191,7 +192,7 @@ export function MessagingView() {
   }, []);
 
   const handleAddChannel = useCallback(async (name: string) => {
-    const res = await fetch(`${API_BASE}/messaging/channels`, {
+    const res = await apiFetch(`${API_BASE}/messaging/channels`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
@@ -203,7 +204,7 @@ export function MessagingView() {
   }, []);
 
   const handleDeleteChannel = useCallback(async (id: string) => {
-    await fetch(`${API_BASE}/messaging/channels/${id}`, { method: "DELETE" }).catch(() => {});
+    await apiFetch(`${API_BASE}/messaging/channels/${id}`, { method: "DELETE" }).catch(() => {});
     setChannels((prev) => prev.filter((c) => c.id !== id));
     if (activeChannelId === id) {
       setActiveChannelId((prev) => {
@@ -215,7 +216,7 @@ export function MessagingView() {
 
   const handleDeleteTopic = useCallback(async (topic: string) => {
     if (activeChannelId) {
-      await fetch(`${API_BASE}/messaging/channels/${activeChannelId}/topics/${encodeURIComponent(topic)}`, {
+      await apiFetch(`${API_BASE}/messaging/channels/${activeChannelId}/topics/${encodeURIComponent(topic)}`, {
         method: "DELETE",
       }).catch(() => {});
     }
@@ -232,7 +233,7 @@ export function MessagingView() {
     if (unfurlTimerRef.current) clearTimeout(unfurlTimerRef.current);
     unfurlTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE}/messaging/unfurl`, {
+        const res = await apiFetch(`${API_BASE}/messaging/unfurl`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url }),
         });
@@ -264,7 +265,7 @@ export function MessagingView() {
       for (const file of Array.from(e.target.files)) {
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch(`${API_BASE}/messaging/channels/${activeChannelId}/upload`, {
+        const res = await apiFetch(`${API_BASE}/messaging/channels/${activeChannelId}/upload`, {
           method: "POST", body: form,
         });
         if (res.ok) {
@@ -329,7 +330,7 @@ export function MessagingView() {
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-muted-foreground">·</span>
                     <TopicBadge topic={activeTopic} />
-                    <button onClick={() => setActiveTopic(null)} className="text-muted-foreground hover:text-foreground">
+                    <button onClick={() => setActiveTopic(null)} aria-label="Clear topic" className="text-muted-foreground hover:text-foreground">
                       <X className="h-3 w-3" />
                     </button>
                   </div>
@@ -376,7 +377,7 @@ export function MessagingView() {
                   {pendingAttachments.map((att, i) => (
                     <div key={i} className="relative group">
                       <AttachmentList attachments={[att]} />
-                      <button onClick={() => removeAttachment(i)}
+                      <button onClick={() => removeAttachment(i)} aria-label="Remove attachment"
                         className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <X className="h-2.5 w-2.5" />
                       </button>
@@ -390,7 +391,7 @@ export function MessagingView() {
                 <div className="flex gap-2">
                   <input ref={fileInputRef} type="file" multiple className="hidden"
                     accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip"
-                    onChange={handleFileSelect} />
+                    onChange={handleFileSelect} aria-label="Attach file" />
                   <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground"
                     disabled={uploading || !connected} onClick={() => fileInputRef.current?.click()}
                     title="Attach file">

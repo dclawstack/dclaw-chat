@@ -251,7 +251,7 @@ function CallsSection() {
                     <div className="w-2 h-2 rounded-full bg-green-500" />
                     <span className="text-xs font-semibold text-white">Call Room</span>
                   </div>
-                  <span className="font-mono text-xs text-gray-400">04:23</span>
+                  <span className="font-mono text-xs text-gray-600">04:23</span>
                 </div>
                 {/* Video tiles */}
                 <div className="grid grid-cols-2 gap-2 p-3">
@@ -262,7 +262,7 @@ function CallsSection() {
                       }`}>
                         {name[0]}
                       </div>
-                      <span className="absolute bottom-1.5 left-2 text-[9px] text-gray-300 bg-black/60 px-1 py-0.5 rounded-full">{name}</span>
+                      <span className="absolute bottom-1.5 left-2 text-[9px] text-gray-600 bg-black/60 px-1 py-0.5 rounded-full">{name}</span>
                     </div>
                   ))}
                 </div>

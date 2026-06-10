@@ -53,6 +53,7 @@ export function MediaGallery({ messages, onClose }: MediaGalleryProps) {
             <button
               key={i}
               onClick={() => setLightbox(img.url)}
+              aria-label={`View ${img.name}`}
               className="relative aspect-square rounded-md overflow-hidden border hover:opacity-90 transition-opacity group"
             >
               <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
@@ -67,8 +68,17 @@ export function MediaGallery({ messages, onClose }: MediaGalleryProps) {
       {/* Lightbox */}
       {lightbox && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close preview"
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
           onClick={() => setLightbox(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setLightbox(null);
+            }
+          }}
         >
           <img
             src={lightbox}
@@ -78,7 +88,8 @@ export function MediaGallery({ messages, onClose }: MediaGalleryProps) {
           />
           <button
             onClick={() => setLightbox(null)}
-            className="absolute top-4 right-4 text-white hover:text-gray-300"
+            aria-label="Close preview"
+            className="absolute top-4 right-4 text-white hover:text-gray-600"
           >
             <X className="h-6 w-6" />
           </button>

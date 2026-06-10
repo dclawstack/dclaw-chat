@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, CurrentUser
+from app.core.deps import get_current_user, CurrentUser, authenticate_websocket
 from app.repositories.huddle_repo import HuddleRepository
+from app.repositories.workspace_repo import is_workspace_member
 from app.schemas.huddle import (
     HuddleRoomCreate,
     HuddleRoomOut,
@@ -64,7 +65,9 @@ class HuddlePresenceManager:
         room = self._rooms.get(room_id, {})
         payload = json.dumps(message)
         dead: Set[str] = set()
-        for uid, ws in room.items():
+        # T3-03: snapshot first — a disconnect during an await would otherwise
+        # raise "dict changed size during iteration".
+        for uid, ws in list(room.items()):
             if uid == exclude:
                 continue
             try:
@@ -86,8 +89,14 @@ async def create_huddle(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    if req.workspace_id and not await is_workspace_member(
+        db, req.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this workspace")
     repo = HuddleRepository(db)
-    return await repo.create_room(name=req.name, created_by=user.user_id)
+    return await repo.create_room(
+        name=req.name, created_by=user.user_id, workspace_id=req.workspace_id
+    )
 
 
 @router.get("", response_model=List[HuddleRoomOut])
@@ -109,6 +118,10 @@ async def get_huddle(
     room = await repo.get_room(room_id)
     if not room:
         raise HTTPException(404, "Huddle room not found")
+    if room.workspace_id and not await is_workspace_member(
+        db, room.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this huddle's workspace")
     return room
 
 
@@ -123,6 +136,10 @@ async def join_huddle(
     room = await repo.get_room(room_id)
     if not room or room.status != "active":
         raise HTTPException(404, "Huddle room not found or closed")
+    if room.workspace_id and not await is_workspace_member(
+        db, room.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this huddle's workspace")
     participant = await repo.join_room(
         room_id=room_id,
         user_id=user.user_id,
@@ -218,10 +235,13 @@ async def delete_huddle(
 async def huddle_presence_ws(
     room_id: str,
     ws: WebSocket,
-    user_id: str = "anonymous",
     db: AsyncSession = Depends(get_db),
 ):
     """Real-time presence channel for a huddle room.
+
+    Identity is derived from a verified token (``?token=`` query param or
+    ``access_token`` cookie) — never from a client-supplied ``user_id`` — so a
+    client cannot spoof another participant's presence/speaking state.
 
     Clients receive JSON events:
       participant-joined  { type, user_id, display_name }
@@ -232,10 +252,23 @@ async def huddle_presence_ws(
     Clients can send:
       speaking-update     { type, is_speaking, is_muted? }
     """
+    auth = authenticate_websocket(ws)
+    if auth is None:
+        await ws.close(code=1008, reason="Unauthorized")
+        return
+    user_id, _ = auth
+
     repo = HuddleRepository(db)
     room = await repo.get_room(room_id)
     if not room or room.status != "active":
         await ws.close(code=4004, reason="Huddle not found or closed")
+        return
+
+    # T2-07: authenticated ≠ authorized — workspace huddles require membership
+    if room.workspace_id and not await is_workspace_member(
+        db, room.workspace_id, user_id
+    ):
+        await ws.close(code=1008, reason="Not a member of this huddle's workspace")
         return
 
     await _presence.connect(room_id, user_id, ws)

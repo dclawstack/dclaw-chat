@@ -10,7 +10,7 @@ from app.repositories.message_repo import MessageRepository
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
 from app.services.openrouter_service import OpenRouterService
 from app.services.nvidia_service import NvidiaService
-from app.core.exceptions import NotFoundException, LLMException
+from app.core.exceptions import NotFoundException, LLMException, ForbiddenException
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +40,38 @@ class ChatService:
         self.openrouter = OpenRouterService()
         self.nvidia = NvidiaService()
 
-    async def complete(self, req: ChatCompletionRequest) -> ChatCompletionResponse:
-        # Get or create conversation
+    async def get_or_create_conversation(
+        self, req: ChatCompletionRequest, user_id: Optional[str]
+    ):
+        """Resolve the target conversation, enforcing ownership.
+
+        A caller may only write into their own conversation (or a legacy
+        NULL-owner row); new conversations are bound to the caller.
+        """
         conversation = await self.conv_repo.get_by_id(req.conversation_id)
-        if not conversation:
-            conversation = await self.conv_repo.create(
-                ConversationCreate(
-                    id=req.conversation_id,
-                    title=req.messages[0].content[:50] + "..."
-                    if req.messages
-                    else "New Chat",
-                    model=req.model,
-                )
-            )
+        if conversation:
+            if (
+                user_id is not None
+                and conversation.created_by
+                and conversation.created_by != user_id
+            ):
+                raise ForbiddenException("Not your conversation")
+            return conversation
+        return await self.conv_repo.create(
+            ConversationCreate(
+                id=req.conversation_id,
+                title=req.messages[0].content[:50] + "..."
+                if req.messages
+                else "New Chat",
+                model=req.model,
+            ),
+            created_by=user_id,
+        )
+
+    async def complete(
+        self, req: ChatCompletionRequest, user_id: Optional[str] = None
+    ) -> ChatCompletionResponse:
+        await self.get_or_create_conversation(req, user_id)
 
         # Store user message
         user_msg = req.messages[-1] if req.messages else Message(role="user", content="")
@@ -94,19 +113,10 @@ class ChatService:
             usage={"prompt_tokens": 0, "completion_tokens": 0},
         )
 
-    async def stream_complete(self, req: ChatCompletionRequest) -> AsyncGenerator[str, None]:
-        # Get or create conversation
-        conversation = await self.conv_repo.get_by_id(req.conversation_id)
-        if not conversation:
-            conversation = await self.conv_repo.create(
-                ConversationCreate(
-                    id=req.conversation_id,
-                    title=req.messages[0].content[:50] + "..."
-                    if req.messages
-                    else "New Chat",
-                    model=req.model,
-                )
-            )
+    async def stream_complete(
+        self, req: ChatCompletionRequest, user_id: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
+        await self.get_or_create_conversation(req, user_id)
 
         # Store user message
         user_msg = req.messages[-1] if req.messages else Message(role="user", content="")

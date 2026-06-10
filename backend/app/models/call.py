@@ -15,6 +15,10 @@ class CallRoomORM(Base):
     )
     title: Mapped[str] = mapped_column(String(255), default="New Call")
     host_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # NULL = legacy/open room; set = only that workspace's members may join
+    workspace_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     channel_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     # waiting | active | ended
     status: Mapped[str] = mapped_column(String(20), default="waiting")

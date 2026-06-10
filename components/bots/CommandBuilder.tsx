@@ -81,8 +81,16 @@ export function CommandBuilder({ commands, onChange }: CommandBuilderProps) {
         <div key={idx} className="border rounded-md overflow-hidden">
           {/* Command header row */}
           <div
+            role="button"
+            tabIndex={0}
             className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent/50 bg-muted/40"
             onClick={() => setExpanded(expanded === idx ? null : idx)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setExpanded(expanded === idx ? null : idx);
+              }
+            }}
           >
             <span className="font-mono text-xs font-semibold text-dclaw-600 min-w-[60px]">
               /{cmd.name || "…"}
@@ -174,6 +182,7 @@ export function CommandBuilder({ commands, onChange }: CommandBuilderProps) {
                     <button
                       className="text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => removeParam(idx, pIdx)}
+                      aria-label="Delete parameter"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

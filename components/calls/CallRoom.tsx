@@ -141,7 +141,7 @@ function Lobby({
           </button>
           <button
             onClick={onCancel}
-            className="w-full py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 text-sm transition-colors"
+            className="w-full py-2.5 rounded-xl text-gray-600 hover:text-white hover:bg-gray-800 text-sm transition-colors"
           >
             Cancel
           </button>
@@ -417,8 +417,8 @@ export function CallRoom({ roomId, userId, isHost, onLeave }: CallRoomProps) {
           )}
         </div>
         <div className="flex items-center gap-5">
-          <span className="text-sm font-mono text-gray-400 tabular-nums">{formatDuration(elapsed)}</span>
-          <div className="flex items-center gap-1.5 text-gray-400 text-sm">
+          <span className="text-sm font-mono text-gray-600 tabular-nums">{formatDuration(elapsed)}</span>
+          <div className="flex items-center gap-1.5 text-gray-600 text-sm">
             <Users className="w-4 h-4" />
             <span>{participantCount}</span>
           </div>
@@ -485,7 +485,7 @@ export function CallRoom({ roomId, userId, isHost, onLeave }: CallRoomProps) {
                     </div>
                   </div>
                 )}
-                <span className="absolute bottom-1.5 left-2 text-[10px] text-gray-300 bg-black/60 px-1.5 py-0.5 rounded-full">
+                <span className="absolute bottom-1.5 left-2 text-[10px] text-gray-600 bg-black/60 px-1.5 py-0.5 rounded-full">
                   You
                 </span>
               </div>
@@ -498,7 +498,7 @@ export function CallRoom({ roomId, userId, isHost, onLeave }: CallRoomProps) {
           <div className="w-64 bg-[#1c1c1c] border-l border-white/5 flex flex-col shrink-0">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
               <span className="text-sm font-semibold">Participants ({participantCount})</span>
-              <button onClick={() => setShowParticipants(false)} className="text-gray-500 hover:text-white transition-colors">
+              <button onClick={() => setShowParticipants(false)} aria-label="Close participants panel" className="text-gray-500 hover:text-white transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -576,7 +576,7 @@ export function CallRoom({ roomId, userId, isHost, onLeave }: CallRoomProps) {
             <div className="w-12 h-12 rounded-xl bg-red-600 hover:bg-red-500 flex items-center justify-center transition-colors">
               <PhoneOff className="w-5 h-5" />
             </div>
-            <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">Leave</span>
+            <span className="text-[10px] text-gray-500 group-hover:text-gray-600 transition-colors">Leave</span>
           </button>
         </div>
       </div>
@@ -648,7 +648,7 @@ function CallControl({
           </span>
         )}
       </div>
-      <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors whitespace-nowrap">
+      <span className="text-[10px] text-gray-500 group-hover:text-gray-600 transition-colors whitespace-nowrap">
         {label}
       </span>
     </button>

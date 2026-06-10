@@ -17,6 +17,7 @@ import {
   Zap,
   Package,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -161,7 +162,7 @@ function BotFormPanel({ initial, botId, onSave, onClose, saving }: BotFormPanelP
       <div className="bg-background border rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
           <h3 className="font-semibold text-sm">{botId ? "Edit Bot" : "Create Custom Bot"}</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -204,6 +205,7 @@ function BotFormPanel({ initial, botId, onSave, onClose, saving }: BotFormPanelP
                 <select
                   value={form.category}
                   onChange={(e) => set({ category: e.target.value })}
+                  aria-label="Category"
                   className="w-full h-8 text-xs rounded-md border bg-background px-2"
                 >
                   {CATEGORIES.filter((c) => c !== "all").map((c) => (
@@ -280,7 +282,7 @@ export function BotMarketplace() {
   const fetchBots = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/bots`);
+      const res = await apiFetch(`${API_BASE}/bots`);
       if (res.ok) setBots(await res.json());
     } catch { /* silent */ }
     finally { setLoading(false); }
@@ -291,7 +293,7 @@ export function BotMarketplace() {
   const handleInstall = async (id: string) => {
     setActionLoading(id);
     try {
-      const res = await fetch(`${API_BASE}/bots/${id}/install`, { method: "POST" });
+      const res = await apiFetch(`${API_BASE}/bots/${id}/install`, { method: "POST" });
       if (res.ok) {
         const updated: Bot = await res.json();
         setBots((prev) => prev.map((b) => (b.id === id ? updated : b)));
@@ -302,7 +304,7 @@ export function BotMarketplace() {
   const handleUninstall = async (id: string) => {
     setActionLoading(id);
     try {
-      const res = await fetch(`${API_BASE}/bots/${id}/uninstall`, { method: "POST" });
+      const res = await apiFetch(`${API_BASE}/bots/${id}/uninstall`, { method: "POST" });
       if (res.ok) {
         const updated: Bot = await res.json();
         setBots((prev) => prev.map((b) => (b.id === id ? updated : b)));
@@ -319,13 +321,13 @@ export function BotMarketplace() {
       };
       let res: Response;
       if (botId) {
-        res = await fetch(`${API_BASE}/bots/${botId}`, {
+        res = await apiFetch(`${API_BASE}/bots/${botId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
       } else {
-        res = await fetch(`${API_BASE}/bots`, {
+        res = await apiFetch(`${API_BASE}/bots`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

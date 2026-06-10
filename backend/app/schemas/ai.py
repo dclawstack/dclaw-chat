@@ -1,5 +1,5 @@
 from typing import List, Optional, Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AIChatRequest(BaseModel):
@@ -17,7 +17,7 @@ class AIChatResponse(BaseModel):
 
 
 class InlineMessage(BaseModel):
-    role: str
+    role: str = Field(..., pattern="^(user|assistant|system)$")
     content: str
 
 

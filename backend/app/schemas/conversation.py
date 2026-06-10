@@ -1,20 +1,20 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.message import MessageOut
 
 
 class ConversationCreate(BaseModel):
     id: Optional[str] = None
-    title: Optional[str] = "New Conversation"
-    folder: Optional[str] = None
+    title: Optional[str] = Field("New Conversation", max_length=255)
+    folder: Optional[str] = Field(None, max_length=255)
     model: Optional[str] = "gemma-4b"
 
 
 class ConversationUpdate(BaseModel):
-    title: Optional[str] = None
-    folder: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=255)
+    folder: Optional[str] = Field(None, max_length=255)
 
 
 class ConversationOut(BaseModel):

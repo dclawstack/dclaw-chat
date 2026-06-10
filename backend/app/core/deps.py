@@ -1,7 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, WebSocket, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
+from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientError
+from functools import lru_cache
 from typing import Optional
 
 from app.core.database import get_db
@@ -10,6 +13,56 @@ from app.core.exceptions import UnauthorizedException
 
 settings = get_settings()
 security = HTTPBearer(auto_error=False)
+
+
+@lru_cache(maxsize=4)
+def _jwks_client(jwks_url: str) -> PyJWKClient:
+    """One cached JWKS client per URL (it caches signing keys internally)."""
+    return PyJWKClient(jwks_url)
+
+
+def decode_token(token: str) -> dict:
+    """Decode and **verify** a JWT, returning its claims.
+
+    Production (``LOGTO_JWKS_URL`` configured): the RS256 signature is verified
+    against Logto's JWKS, together with ``exp`` and — when configured —
+    ``aud``/``iss``. Any failure raises ``jwt.InvalidTokenError``.
+
+    Dev/scaffold (``DEBUG`` true and no JWKS configured): signature verification
+    is skipped so local development works without a real IdP. This path is never
+    reached in production because ``DEBUG`` defaults to ``False`` and, absent a
+    JWKS URL, unverified tokens are rejected outright.
+    """
+    if settings.LOGTO_JWKS_URL:
+        try:
+            signing_key = _jwks_client(settings.LOGTO_JWKS_URL).get_signing_key_from_jwt(token)
+        except PyJWKClientError as e:
+            raise jwt.InvalidTokenError(f"Unable to resolve signing key: {e}") from e
+        return jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=settings.LOGTO_AUDIENCE or None,
+            issuer=settings.LOGTO_ISSUER or None,
+            options={
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_aud": bool(settings.LOGTO_AUDIENCE),
+                "verify_iss": bool(settings.LOGTO_ISSUER),
+            },
+        )
+
+    if settings.DEBUG:
+        return jwt.decode(
+            token,
+            options={"verify_signature": False, "verify_exp": True},
+            algorithms=["HS256", "RS256"],
+            audience=settings.LOGTO_AUDIENCE or None,
+        )
+
+    raise jwt.InvalidTokenError(
+        "JWT signature cannot be verified: LOGTO_JWKS_URL is not configured"
+    )
 
 
 class CurrentUser:
@@ -32,14 +85,7 @@ async def get_current_user(
         raise UnauthorizedException("Missing token")
 
     try:
-        # In production, fetch JWKS from Logto and verify RS256
-        # For scaffold/dev, accept HS256 with a fallback secret
-        payload = jwt.decode(
-            token,
-            options={"verify_signature": False, "verify_exp": True},
-            algorithms=["HS256", "RS256"],
-            audience=settings.LOGTO_AUDIENCE or None,
-        )
+        payload = decode_token(token)
         user_id = payload.get("sub")
         email = payload.get("email", "")
         role = payload.get("role", "User")
@@ -55,7 +101,41 @@ async def get_current_user(
         raise UnauthorizedException(f"Invalid token: {str(e)}")
 
 
-async def require_role(*roles: str):
+def authenticate_websocket(websocket: WebSocket) -> Optional[tuple[str, str]]:
+    """Derive ``(user_id, user_name)`` from a verified token on a WebSocket.
+
+    The token is read from the ``token`` query param or the ``access_token``
+    cookie and verified via :func:`decode_token` (RS256/JWKS in production).
+    Identity is taken only from the verified claims — never from client-supplied
+    ``user_id``/``user_name`` query params. Returns ``None`` when authentication
+    fails (caller should close with code 1008).
+    """
+    token = websocket.query_params.get("token") or websocket.cookies.get("access_token")
+
+    if not token:
+        if settings.DEBUG:
+            return ("dev-user", "You")
+        return None
+
+    try:
+        payload = decode_token(token)
+    except jwt.InvalidTokenError:
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    user_name = payload.get("name") or payload.get("email") or "User"
+    return (user_id, user_name)
+
+
+def require_role(*roles: str):
+    """Sync factory returning a dependency that gates a route on the caller's role.
+
+    Owner is always allowed. Must be a plain ``def`` so ``Depends(require_role(...))``
+    receives the inner ``checker`` coroutine function — an ``async def`` factory
+    would instead hand FastAPI an un-awaited coroutine and silently never gate.
+    """
     async def checker(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if user.role not in roles and user.role != "Owner":
             raise HTTPException(

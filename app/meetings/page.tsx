@@ -100,6 +100,7 @@ export default function MeetingsPage() {
             accept="audio/*,video/*"
             className="hidden"
             onChange={handleFileChange}
+            aria-label="Upload meeting recording"
           />
         </div>
 

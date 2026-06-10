@@ -200,9 +200,9 @@ export function HuddleRoomView({
       <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
         <div>
           <p className="font-semibold text-sm">{room.name}</p>
-          <p className="text-xs text-gray-400">Audio huddle</p>
+          <p className="text-xs text-gray-600">Audio huddle</p>
         </div>
-        <div className="flex items-center gap-1.5 text-gray-400 text-xs">
+        <div className="flex items-center gap-1.5 text-gray-600 text-xs">
           <Users className="w-3.5 h-3.5" />
           <span>{participants.length}</span>
         </div>
@@ -275,7 +275,7 @@ function ParticipantTile({
           <span className="absolute inset-0 rounded-full animate-ping bg-green-400 opacity-20" />
         )}
       </div>
-      <span className="text-xs text-gray-300 text-center truncate w-full px-1">
+      <span className="text-xs text-gray-600 text-center truncate w-full px-1">
         {isSelf ? `${participant.display_name} (you)` : participant.display_name}
       </span>
     </div>

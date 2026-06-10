@@ -20,7 +20,7 @@ spec:
       serviceAccountName: {{ include "dclaw-chat.serviceAccountName" . }}
       containers:
         - name: frontend
-          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          image: "{{ .Values.frontend.image.repository }}{{ if .Values.frontend.image.digest }}@{{ .Values.frontend.image.digest }}{{ else }}:{{ .Values.frontend.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
@@ -50,7 +50,7 @@ spec:
       serviceAccountName: {{ include "dclaw-chat.serviceAccountName" . }}
       containers:
         - name: backend
-          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          image: "{{ .Values.backend.image.repository }}{{ if .Values.backend.image.digest }}@{{ .Values.backend.image.digest }}{{ else }}:{{ .Values.backend.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.backend.port }}

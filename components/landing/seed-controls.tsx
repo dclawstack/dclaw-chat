@@ -9,6 +9,7 @@
  */
 import { useState } from "react";
 import { Database, Eraser, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -25,7 +26,7 @@ export default function SeedControls() {
   async function call(action: "seed" | "clear") {
     setStatus({ kind: "loading", action });
     try {
-      const res = await fetch(`${API_BASE}/admin/${action}`, {
+      const res = await apiFetch(`${API_BASE}/admin/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

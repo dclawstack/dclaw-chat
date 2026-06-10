@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HuddleParticipantOut(BaseModel):
@@ -17,7 +17,8 @@ class HuddleParticipantOut(BaseModel):
 
 
 class HuddleRoomCreate(BaseModel):
-    name: str = "Huddle"
+    name: str = Field("Huddle", max_length=255)
+    workspace_id: Optional[str] = Field(None, max_length=36)
 
 
 class HuddleRoomOut(BaseModel):
@@ -26,6 +27,7 @@ class HuddleRoomOut(BaseModel):
     id: str
     name: str
     created_by: Optional[str] = None
+    workspace_id: Optional[str] = None
     status: str
     created_at: datetime
     closed_at: Optional[datetime] = None
@@ -33,7 +35,7 @@ class HuddleRoomOut(BaseModel):
 
 
 class HuddleJoinRequest(BaseModel):
-    display_name: str = "Anonymous"
+    display_name: str = Field("Anonymous", max_length=255)
 
 
 class HuddleSpeakingRequest(BaseModel):

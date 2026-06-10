@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 from httpx import AsyncClient, ASGITransport
 
 from app.core.database import Base, get_db
@@ -9,7 +10,16 @@ from app.main import app
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-engine = create_async_engine(TEST_DATABASE_URL, echo=False, future=True)
+# StaticPool keeps a single shared connection so every session sees the same
+# in-memory database; without it, pooled connections get separate empty DBs and
+# tests fail non-deterministically with "no such table" depending on ordering.
+engine = create_async_engine(
+    TEST_DATABASE_URL,
+    echo=False,
+    future=True,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

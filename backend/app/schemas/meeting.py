@@ -1,7 +1,7 @@
 import json
 from typing import Optional, List, Literal
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MeetingActionItem(BaseModel):
@@ -40,11 +40,11 @@ class MeetingOut(BaseModel):
 
 
 class MeetingCreate(BaseModel):
-    title: str = "Untitled Meeting"
+    title: str = Field("Untitled Meeting", max_length=255)
 
 
 class MeetingUpdateTitle(BaseModel):
-    title: str
+    title: str = Field(..., max_length=255)
 
 
 class ProcessMeetingRequest(BaseModel):

@@ -18,7 +18,7 @@ function resolveUrl(url: string) {
 
 function ImageCard({ att }: { att: FileAttachment }) {
   return (
-    <a href={resolveUrl(att.url)} target="_blank" rel="noopener noreferrer" className="block">
+    <a href={resolveUrl(att.url)} target="_blank" rel="noopener noreferrer" aria-label={`Open ${att.name}`} className="block">
       <img
         src={resolveUrl(att.url)}
         alt={att.name}

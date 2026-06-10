@@ -38,7 +38,15 @@ export function MeetingCard({ meeting, selected, onSelect, onDelete }: MeetingCa
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(meeting)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(meeting);
+        }
+      }}
       className={cn(
         "cursor-pointer rounded-lg border p-4 transition-colors hover:bg-zinc-800",
         selected ? "border-blue-500 bg-zinc-800" : "border-zinc-700 bg-zinc-900"

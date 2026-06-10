@@ -135,7 +135,19 @@ export function SettingsDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/60"
+        role="button"
+        tabIndex={0}
+        aria-label="Close settings"
+        onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+      />
       <div className="relative z-10 w-full max-w-md rounded-lg border bg-card text-card-foreground shadow-2xl">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
@@ -190,6 +202,7 @@ export function SettingsDialog({
             <select
               value={selectedModel}
               onChange={(e) => handleDefaultModel(e.target.value)}
+              aria-label="Default model"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dclaw-500"
             >
               {models.map((m) => (
@@ -220,6 +233,7 @@ export function SettingsDialog({
               step={0.05}
               value={temperature}
               onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+              aria-label="Temperature"
               className="w-full accent-dclaw-500"
             />
             <div className="mt-1 flex justify-between text-xs text-muted-foreground">

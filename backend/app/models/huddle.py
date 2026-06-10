@@ -15,6 +15,10 @@ class HuddleRoomORM(Base):
     )
     name: Mapped[str] = mapped_column(String(255), default="Huddle")
     created_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # NULL = legacy/open huddle; set = only that workspace's members may join
+    workspace_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     # active | closed
     status: Mapped[str] = mapped_column(String(20), default="active")
     created_at: Mapped[datetime] = mapped_column(

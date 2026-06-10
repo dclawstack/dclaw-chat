@@ -11,11 +11,17 @@ class HuddleRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_room(self, name: str, created_by: Optional[str] = None) -> HuddleRoomORM:
+    async def create_room(
+        self,
+        name: str,
+        created_by: Optional[str] = None,
+        workspace_id: Optional[str] = None,
+    ) -> HuddleRoomORM:
         room = HuddleRoomORM(
             id=str(uuid.uuid4()),
             name=name,
             created_by=created_by,
+            workspace_id=workspace_id,
             status="active",
         )
         self.db.add(room)

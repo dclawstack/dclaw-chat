@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
-import httpx
+from app.core.ssrf import SSRFError, safe_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +52,16 @@ async def dispatch_webhook(
         "user_name": user_name,
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        # safe_async_client enforces the SSRF guard with a pinned DNS
+        # resolution at connect time and keeps redirects disabled.
+        async with safe_async_client(timeout=10.0) as client:
             resp = await client.post(webhook_url, json=payload)
             resp.raise_for_status()
             data = resp.json()
             return data.get("text") or data.get("message") or str(data)
+    except SSRFError as exc:
+        logger.warning("Blocked unsafe webhook URL %s: %s", webhook_url, exc)
+        return None
     except Exception as exc:
         logger.warning("Webhook dispatch failed for %s: %s", webhook_url, exc)
         return None

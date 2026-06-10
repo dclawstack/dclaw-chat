@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: dclaw
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-dclawpass}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set — no default (T3-11)}
       POSTGRES_DB: dclaw_chat
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -20,7 +20,9 @@ services:
       retries: 5
 
   ollama:
-    image: ollama/ollama:latest
+    # T3-14: avoid the mutable `latest` tag. Pin a version (override via
+    # OLLAMA_IMAGE, ideally to a @sha256 digest in production).
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.6.8}
     container_name: dclaw-chat-ollama
     restart: unless-stopped
     volumes:
@@ -42,12 +44,17 @@ services:
     container_name: dclaw-chat-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://dclaw:${DB_PASSWORD:-dclawpass}@db:5432/dclaw_chat
+      # T3-05: default to production so the fail-closed guard engages —
+      # with ENVIRONMENT=production the API refuses to boot if DEBUG=true.
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DATABASE_URL: postgresql+asyncpg://dclaw:${DB_PASSWORD:?DB_PASSWORD must be set — no default (T3-11)}@db:5432/dclaw_chat
       OLLAMA_URL: http://ollama:11434
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_URL: https://openrouter.ai/api/v1
       LOGTO_ENDPOINT: ${LOGTO_ENDPOINT:-}
       LOGTO_AUDIENCE: ${LOGTO_AUDIENCE:-}
+      LOGTO_ISSUER: ${LOGTO_ISSUER:-}
+      LOGTO_JWKS_URL: ${LOGTO_JWKS_URL:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,https://chat.dclawstack.io}
     ports:
       - "127.0.0.1:8000:8000"

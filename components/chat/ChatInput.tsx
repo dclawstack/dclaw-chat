@@ -61,6 +61,7 @@ export function ChatInput({ onSend, isLoading, disabled }: ChatInputProps) {
             onKeyDown={handleKeyDown}
             onInput={handleInput}
             placeholder="Message DClaw Chat..."
+            aria-label="Message DClaw Chat"
             disabled={isLoading || disabled}
             rows={1}
             className="flex-1 bg-transparent resize-none py-2 px-1 text-sm outline-none placeholder:text-muted-foreground min-h-[36px] max-h-[200px]"

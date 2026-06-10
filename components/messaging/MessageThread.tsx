@@ -11,6 +11,7 @@ import { TopicBadge } from "./TopicBadge";
 import { AttachmentList } from "./MessageAttachment";
 import { ThreadView } from "@/components/thread-view";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { apiFetch } from "@/lib/api";
 
 interface MessageItemProps {
   message: ChannelMessage;
@@ -109,7 +110,7 @@ export function MessageThread({
       setFetchedReplies([]);
       return;
     }
-    fetch(
+    apiFetch(
       `${API_BASE}/messaging/channels/${channelId}/messages/${threadParent.id}/thread`
     )
       .then((r) => r.json())

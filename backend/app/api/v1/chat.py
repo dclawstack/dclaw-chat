@@ -18,7 +18,7 @@ async def chat_completions(
     user: CurrentUser = Depends(get_current_user),
 ):
     service = ChatService(db)
-    return await service.complete(req)
+    return await service.complete(req, user_id=user.user_id)
 
 
 @router.post("/stream")
@@ -28,10 +28,13 @@ async def chat_stream(
     user: CurrentUser = Depends(get_current_user),
 ):
     service = ChatService(db)
+    # Authorize before the SSE response starts — inside the generator a 403
+    # could only surface as an error event on an already-200 stream.
+    await service.get_or_create_conversation(req, user.user_id)
 
     async def event_generator():
         try:
-            async for token in service.stream_complete(req):
+            async for token in service.stream_complete(req, user_id=user.user_id):
                 yield f"data: {json.dumps({'delta': token})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"

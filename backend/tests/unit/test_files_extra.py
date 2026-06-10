@@ -145,6 +145,14 @@ def test_extract_text_unsupported_type(tmp_path, monkeypatch):
 
 
 def _patch_transport(monkeypatch, transport):
+    # The SSRF guard's pinned resolver does a real DNS lookup that the mock
+    # transport can't intercept; stub the resolver seam so these tests
+    # exercise unfurl parsing, not DNS. (SSRF blocking/pinning itself is
+    # covered in test_ssrf.py.)
+    monkeypatch.setattr(
+        "app.core.ssrf.socket.getaddrinfo",
+        lambda host, *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
+    )
     orig_init = httpx.AsyncClient.__init__
     monkeypatch.setattr(
         httpx.AsyncClient,
@@ -218,6 +226,205 @@ async def test_unfurl_title_fallback(monkeypatch):
     svc = FileService()
     result = await svc.unfurl("https://x.test")
     assert result["title"] == "Just A Title"
+
+
+@pytest.mark.asyncio
+async def test_unfurl_aborts_oversized_streaming_body(monkeypatch):
+    # T1-04: a server streaming an endless text/html body must not be
+    # buffered past the 64 KiB cap.
+    from app.services.files import MAX_UNFURL_BYTES
+
+    state = {"yielded": 0}
+    chunk_size = 8 * 1024
+
+    async def big_body():
+        first = b"<html><head><title>Big Page</title></head><body>"
+        state["yielded"] += len(first)
+        yield first
+        filler = b"x" * chunk_size
+        for _ in range(4096):  # 32 MiB available
+            state["yielded"] += chunk_size
+            yield filler
+
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, content=big_body(), headers={"content-type": "text/html"}
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    svc = FileService()
+    result = await svc.unfurl("https://big.test/page")
+    # download aborted at the cap (allow one chunk of slack for buffering)
+    assert state["yielded"] <= MAX_UNFURL_BYTES + 2 * chunk_size
+    # the truncated head is still parsed
+    assert result["title"] == "Big Page"
+
+
+@pytest.mark.asyncio
+async def test_unfurl_rejects_oversized_content_length_before_reading(monkeypatch):
+    state = {"yielded": 0}
+
+    async def body():
+        state["yielded"] += 1
+        yield b"<html><head><title>Nope</title></head></html>"
+
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200,
+            content=body(),
+            headers={"content-type": "text/html", "content-length": "10000000"},
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    svc = FileService()
+    url = "https://huge.test/page"
+    result = await svc.unfurl(url)
+    assert result["title"] == url  # base result, body never parsed
+    assert state["yielded"] == 0  # …and never read
+
+
+@pytest.mark.asyncio
+async def test_unfurl_accepts_xhtml_content_type(monkeypatch):
+    html = "<html><head><title>XHTML Page</title></head></html>"
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, text=html, headers={"content-type": "application/xhtml+xml"}
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    svc = FileService()
+    result = await svc.unfurl("https://x.test/page")
+    assert result["title"] == "XHTML Page"
+
+
+@pytest.mark.asyncio
+async def test_unfurl_rejects_overlong_or_non_http_urls():
+    svc = FileService()
+    long_url = "https://a.test/" + "a" * 3000
+    result = await svc.unfurl(long_url)
+    assert result["title"] == long_url  # base result, no fetch
+
+    result = await svc.unfurl("ftp://a.test/x")
+    assert result["description"] == "" and result["image"] == ""
+
+
+@pytest.mark.parametrize(
+    "bad_image",
+    [
+        "javascript:alert(1)",
+        "data:text/html;base64,PHNjcmlwdD4=",
+        "http://169.254.169.254/latest/meta-data",
+        "https://127.0.0.1/secret.png",
+    ],
+)
+@pytest.mark.asyncio
+async def test_unfurl_drops_unsafe_og_image(monkeypatch, bad_image):
+    # T1-05: og:image must be an absolute public http(s) URL or be dropped.
+    html = (
+        "<html><head>"
+        f'<meta property="og:image" content="{bad_image}">'
+        "<title>T</title></head></html>"
+    )
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, text=html, headers={"content-type": "text/html"}
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    svc = FileService()
+    result = await svc.unfurl("https://site.test/page")
+    assert result["image"] == ""
+
+
+@pytest.mark.asyncio
+async def test_unfurl_resolves_relative_og_image_against_page(monkeypatch):
+    html = (
+        "<html><head>"
+        '<meta property="og:image" content="/img/p.png">'
+        "</head></html>"
+    )
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, text=html, headers={"content-type": "text/html"}
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    svc = FileService()
+    result = await svc.unfurl("https://site.test/page")
+    assert result["image"] == "https://site.test/img/p.png"
+
+
+@pytest.mark.asyncio
+async def test_unfurl_drops_unsafe_favicon(monkeypatch):
+    html = (
+        "<html><head>"
+        '<link rel="icon" href="javascript:alert(1)">'
+        "<title>T</title></head></html>"
+    )
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, text=html, headers={"content-type": "text/html"}
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    svc = FileService()
+    result = await svc.unfurl("https://site.test/page")
+    assert result["favicon"] == ""
+
+
+@pytest.mark.asyncio
+async def test_unfurl_fetches_through_pinned_ssrf_client(monkeypatch):
+    # T1-03 call-site check: the unfurl GET goes through safe_async_client,
+    # which resolves once and connects to the validated IP.
+    from app.core import ssrf
+    import app.services.files as files_mod
+
+    calls = []
+
+    def fake_getaddrinfo(host, *a, **k):
+        calls.append(host)
+        return [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(ssrf.socket, "getaddrinfo", fake_getaddrinfo)
+
+    seen = {}
+
+    def handler(req):
+        seen["connect_host"] = req.url.host
+        seen["host_header"] = req.headers["host"]
+        return httpx.Response(
+            200, text="<title>Pinned</title>", headers={"content-type": "text/html"}
+        )
+
+    real_factory = files_mod.safe_async_client
+    monkeypatch.setattr(
+        files_mod,
+        "safe_async_client",
+        lambda **kw: real_factory(transport=httpx.MockTransport(handler), **kw),
+    )
+    svc = FileService()
+    result = await svc.unfurl("https://site.test/page")
+    assert result["title"] == "Pinned"
+    assert seen["connect_host"] == "93.184.216.34"
+    assert seen["host_header"] == "site.test"
+    assert calls == ["site.test"]  # exactly one resolution
+
+
+@pytest.mark.asyncio
+async def test_unfurl_blocks_internal_url_at_connect(monkeypatch):
+    # Fail closed: no transport stubbing here — the pinned guard itself
+    # rejects the internal resolution before any connection is attempted.
+    from app.core import ssrf
+
+    monkeypatch.setattr(
+        ssrf.socket,
+        "getaddrinfo",
+        lambda host, *a, **k: [(2, 1, 6, "", ("169.254.169.254", 0))],
+    )
+    svc = FileService()
+    url = "https://rebound.test/secret"
+    result = await svc.unfurl(url)
+    assert result["title"] == url  # base result, fetch blocked
 
 
 def test_mime_sets_are_disjoint():

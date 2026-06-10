@@ -24,7 +24,22 @@ export function TopicBadge({ topic, small, onClick }: TopicBadgeProps) {
   const cursor = onClick ? "cursor-pointer hover:opacity-80" : "";
 
   return (
-    <span className={`${base} ${size} ${cursor}`} onClick={onClick}>
+    <span
+      className={`${base} ${size} ${cursor}`}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+    >
       {topic}
     </span>
   );

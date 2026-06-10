@@ -21,6 +21,8 @@ class BotORM(Base):
     # JSON array of command definitions
     commands: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[str] = mapped_column(String(50), default="general")
+    # NULL = legacy-shared bot (fail-open, same policy as conversations)
+    created_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     installed: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(

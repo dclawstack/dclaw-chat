@@ -20,8 +20,16 @@ function ThreadSummaryCard({ summary, onClose }: ThreadSummaryCardProps) {
   return (
     <div className="border border-border rounded-lg bg-muted/30 mb-3">
       <div
+        role="button"
+        tabIndex={0}
         className="flex items-center justify-between px-3 py-2 cursor-pointer"
         onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
       >
         <div className="flex items-center gap-2 text-xs font-medium text-foreground">
           <FileText className="h-3.5 w-3.5 text-dclaw-500" />
@@ -38,6 +46,7 @@ function ThreadSummaryCard({ summary, onClose }: ThreadSummaryCardProps) {
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); }}
+            aria-label="Close"
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
@@ -85,7 +94,7 @@ function ActionsPanel({ actions, onClose }: ActionsPanelProps) {
           Extracted Actions
           <span className="text-muted-foreground font-normal">({items.length})</span>
         </div>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+        <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground">
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -93,8 +102,16 @@ function ActionsPanel({ actions, onClose }: ActionsPanelProps) {
         {items.map((action, i) => (
           <div
             key={i}
+            role="button"
+            tabIndex={0}
             className="flex items-start gap-2 cursor-pointer"
             onClick={() => toggle(i)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle(i);
+              }
+            }}
           >
             <div
               className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center ${

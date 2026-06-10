@@ -5,7 +5,10 @@ replicaCount: 2
 frontend:
   image:
     repository: ghcr.io/dclawstack/dclaw-chat
-    tag: latest
+    # T3-14: never deploy mutable `latest`. Pin a release tag, and in prod set
+    # `digest` (e.g. "sha256:...") which takes precedence over `tag`.
+    tag: v1.0.0
+    digest: ""
     pullPolicy: IfNotPresent
   port: 3000
   resources:
@@ -19,7 +22,9 @@ frontend:
 backend:
   image:
     repository: ghcr.io/dclawstack/dclaw-chat-backend
-    tag: latest
+    # T3-14: pin a release tag; set `digest` in prod to deploy by content hash.
+    tag: v1.0.0
+    digest: ""
     pullPolicy: IfNotPresent
   port: 8000
   resources:
@@ -30,8 +35,20 @@ backend:
       cpu: 250m
       memory: 512Mi
   env:
+    # T3-05: the fail-closed guard only fires under ENVIRONMENT=production —
+    # without it an operator setting DEBUG=true boots the unauthenticated
+    # Owner dev-user backdoor instead of being refused at startup.
+    - name: ENVIRONMENT
+      value: production
+    # T3-11: no hardcoded postgres:postgres credentials — source the full DSN
+    # (with its password) from the secret. Create the key with e.g.
+    #   kubectl create secret generic dclaw-chat-secrets \
+    #     --from-literal=database-url='postgresql+asyncpg://dclaw:<STRONG_PASS>@dclaw-chat-db-rw:5432/dclaw_chat'
     - name: DATABASE_URL
-      value: "postgresql+asyncpg://postgres:postgres@dclaw-chat-db-rw:5432/dclaw_chat"
+      valueFrom:
+        secretKeyRef:
+          name: dclaw-chat-secrets
+          key: database-url
     - name: OPENROUTER_API_KEY
       valueFrom:
         secretKeyRef:

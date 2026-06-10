@@ -16,6 +16,7 @@ class CallRoomRepository:
         title: str,
         host_id: Optional[str] = None,
         channel_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
         max_participants: int = 50,
         recording_enabled: bool = False,
     ) -> CallRoomORM:
@@ -24,6 +25,7 @@ class CallRoomRepository:
             title=title,
             host_id=host_id,
             channel_id=channel_id,
+            workspace_id=workspace_id,
             status="waiting",
             max_participants=max_participants,
             recording_enabled=recording_enabled,

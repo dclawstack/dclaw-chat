@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db, async_session
 from app.core.deps import get_current_user, CurrentUser
+from app.core.exceptions import ForbiddenException
 from app.models.bot import BotORM
 from app.models.channel import ChannelMessageORM
 from app.services.command_parser import parse_command, execute_command
@@ -92,8 +93,6 @@ class BotOut(BaseModel):
 class CommandExecuteRequest(BaseModel):
     content: str
     channel_id: str
-    user_id: str = "dev-user"
-    user_name: str = "You"
 
 
 # ── Seed data ─────────────────────────────────────────────────────────────────
@@ -192,6 +191,13 @@ async def _seed_bots(db: AsyncSession) -> None:
     await db.commit()
 
 
+def _assert_owner(bot: BotORM, user: CurrentUser) -> None:
+    """403 on another user's bot. NULL owner = legacy-shared row
+    (same fail-open policy as conversations)."""
+    if bot.created_by and bot.created_by != user.user_id:
+        raise ForbiddenException("Not your bot")
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=List[BotOut])
@@ -228,6 +234,7 @@ async def create_bot(
         commands=json.dumps([c.model_dump() for c in req.commands]),
         category=req.category,
         installed=True,
+        created_by=user.user_id,
     )
     db.add(bot)
     await db.commit()
@@ -257,6 +264,7 @@ async def update_bot(
     bot = await db.get(BotORM, bot_id)
     if not bot:
         raise HTTPException(404, "Bot not found")
+    _assert_owner(bot, user)
     if req.name is not None:
         bot.name = req.name
     if req.description is not None:
@@ -285,6 +293,7 @@ async def delete_bot(
     bot = await db.get(BotORM, bot_id)
     if not bot:
         raise HTTPException(404, "Bot not found")
+    _assert_owner(bot, user)
     await db.delete(bot)
     await db.commit()
 
@@ -385,8 +394,8 @@ async def run_command(
         bot_commands_json=matched_bot.commands,
         webhook_url=matched_bot.webhook_url,
         channel_id=req.channel_id,
-        user_id=req.user_id,
-        user_name=req.user_name,
+        user_id=user.user_id,
+        user_name=user.email or user.user_id,
     )
 
     # Persist bot reply as a channel message

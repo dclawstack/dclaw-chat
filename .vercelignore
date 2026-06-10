@@ -1,0 +1,19 @@
+# Vercel only needs the Next.js app to build the static landing export.
+# Exclude heavy/irrelevant paths (and the 100MB+ files that blew the upload limit).
+node_modules
+dist
+.next
+
+# Python backend (runs elsewhere; not part of the static build) + its uploads
+backend
+
+# Desktop shell + infra not used by the web build
+src-tauri
+helm
+deploy
+
+# Misc
+.obsidian
+*.mov
+*.db
+test_media_gallery.mjs

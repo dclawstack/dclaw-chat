@@ -1,4 +1,11 @@
+import { authHeaders, wsAuthQuery } from "./auth";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+/** fetch wrapper that injects the Authorization header when a token is set. */
+export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, { ...init, headers: { ...authHeaders(), ...(init.headers || {}) } });
+}
 
 export interface ApiMessage {
   role: "user" | "assistant" | "system";
@@ -25,7 +32,7 @@ export interface ChatCompletionResponse {
 export async function chatComplete(
   req: ChatCompletionRequest
 ): Promise<ChatCompletionResponse> {
-  const res = await fetch(`${API_BASE}/chat/completions`, {
+  const res = await apiFetch(`${API_BASE}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -49,7 +56,7 @@ export async function chatStream(
   req: ChatCompletionRequest,
   callbacks: ChatStreamCallbacks
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/chat/stream`, {
+  const res = await apiFetch(`${API_BASE}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -113,7 +120,7 @@ export interface ModelInfo {
 }
 
 export async function listModels(): Promise<ModelInfo[]> {
-  const res = await fetch(`${API_BASE}/models`);
+  const res = await apiFetch(`${API_BASE}/models`);
   if (!res.ok) {
     throw new Error(`Failed to fetch models: ${res.statusText}`);
   }
@@ -151,7 +158,7 @@ export interface ActionsResponse {
 }
 
 export async function copilotChat(req: CopilotChatRequest): Promise<CopilotChatResponse> {
-  const res = await fetch(`${API_BASE}/ai/chat`, {
+  const res = await apiFetch(`${API_BASE}/ai/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -168,7 +175,7 @@ export async function summarizeConversation(
   messages: ApiMessage[],
   model?: string
 ): Promise<SummarizeResponse> {
-  const res = await fetch(`${API_BASE}/ai/summarize`, {
+  const res = await apiFetch(`${API_BASE}/ai/summarize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ conversation_id: conversationId, messages, model }),
@@ -185,7 +192,7 @@ export async function extractActions(
   messages: ApiMessage[],
   model?: string
 ): Promise<ActionsResponse> {
-  const res = await fetch(`${API_BASE}/ai/actions`, {
+  const res = await apiFetch(`${API_BASE}/ai/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ conversation_id: conversationId, messages, model }),
@@ -223,7 +230,7 @@ export interface Meeting {
 }
 
 export async function createMeeting(title: string): Promise<Meeting> {
-  const res = await fetch(`${API_BASE}/meetings`, {
+  const res = await apiFetch(`${API_BASE}/meetings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -239,7 +246,7 @@ export async function uploadMeeting(file: File, title?: string): Promise<Meeting
   const form = new FormData();
   form.append("file", file);
   if (title) form.append("title", title);
-  const res = await fetch(`${API_BASE}/meetings/upload`, {
+  const res = await apiFetch(`${API_BASE}/meetings/upload`, {
     method: "POST",
     body: form,
   });
@@ -251,7 +258,7 @@ export async function uploadMeeting(file: File, title?: string): Promise<Meeting
 }
 
 export async function processMeeting(meetingId: string, model?: string): Promise<Meeting> {
-  const res = await fetch(`${API_BASE}/meetings/${meetingId}/process`, {
+  const res = await apiFetch(`${API_BASE}/meetings/${meetingId}/process`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: model ?? "gemma-4b" }),
@@ -264,7 +271,7 @@ export async function processMeeting(meetingId: string, model?: string): Promise
 }
 
 export async function listMeetings(): Promise<Meeting[]> {
-  const res = await fetch(`${API_BASE}/meetings`);
+  const res = await apiFetch(`${API_BASE}/meetings`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -273,7 +280,7 @@ export async function listMeetings(): Promise<Meeting[]> {
 }
 
 export async function getMeeting(meetingId: string): Promise<Meeting> {
-  const res = await fetch(`${API_BASE}/meetings/${meetingId}`);
+  const res = await apiFetch(`${API_BASE}/meetings/${meetingId}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -282,7 +289,7 @@ export async function getMeeting(meetingId: string): Promise<Meeting> {
 }
 
 export async function deleteMeeting(meetingId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/meetings/${meetingId}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_BASE}/meetings/${meetingId}`, { method: "DELETE" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -311,7 +318,7 @@ export interface CallRoomCreate {
 }
 
 export async function createCallRoom(req: CallRoomCreate = {}): Promise<CallRoom> {
-  const res = await fetch(`${API_BASE}/calls`, {
+  const res = await apiFetch(`${API_BASE}/calls`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -326,7 +333,7 @@ export async function createCallRoom(req: CallRoomCreate = {}): Promise<CallRoom
 export async function listCallRooms(channelId?: string): Promise<CallRoom[]> {
   const url = new URL(`${API_BASE}/calls`);
   if (channelId) url.searchParams.set("channel_id", channelId);
-  const res = await fetch(url.toString());
+  const res = await apiFetch(url.toString());
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -335,7 +342,7 @@ export async function listCallRooms(channelId?: string): Promise<CallRoom[]> {
 }
 
 export async function getCallRoom(roomId: string): Promise<CallRoom> {
-  const res = await fetch(`${API_BASE}/calls/${roomId}`);
+  const res = await apiFetch(`${API_BASE}/calls/${roomId}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -344,7 +351,7 @@ export async function getCallRoom(roomId: string): Promise<CallRoom> {
 }
 
 export async function endCallRoom(roomId: string): Promise<CallRoom> {
-  const res = await fetch(`${API_BASE}/calls/${roomId}/end`, { method: "POST" });
+  const res = await apiFetch(`${API_BASE}/calls/${roomId}/end`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -353,17 +360,19 @@ export async function endCallRoom(roomId: string): Promise<CallRoom> {
 }
 
 export async function deleteCallRoom(roomId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/calls/${roomId}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_BASE}/calls/${roomId}`, { method: "DELETE" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
 }
 
-export function buildSignalingUrl(roomId: string, userId: string): string {
+export function buildSignalingUrl(roomId: string, _userId: string): string {
   const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
     .replace(/^http/, "ws");
-  return `${wsBase}/calls/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
+  // Identity comes from the verified token; the backend ignores user_id params.
+  const q = wsAuthQuery();
+  return `${wsBase}/calls/${roomId}/ws${q ? `?${q}` : ""}`;
 }
 
 // ── Huddles ───────────────────────────────────────────────────────────────────
@@ -390,7 +399,7 @@ export interface HuddleRoom {
 }
 
 export async function createHuddle(name: string = "Huddle"): Promise<HuddleRoom> {
-  const res = await fetch(`${API_BASE}/huddles`, {
+  const res = await apiFetch(`${API_BASE}/huddles`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
@@ -403,7 +412,7 @@ export async function createHuddle(name: string = "Huddle"): Promise<HuddleRoom>
 }
 
 export async function listHuddles(): Promise<HuddleRoom[]> {
-  const res = await fetch(`${API_BASE}/huddles`);
+  const res = await apiFetch(`${API_BASE}/huddles`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -412,7 +421,7 @@ export async function listHuddles(): Promise<HuddleRoom[]> {
 }
 
 export async function getHuddle(roomId: string): Promise<HuddleRoom> {
-  const res = await fetch(`${API_BASE}/huddles/${roomId}`);
+  const res = await apiFetch(`${API_BASE}/huddles/${roomId}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -424,7 +433,7 @@ export async function joinHuddle(
   roomId: string,
   displayName: string = "Anonymous"
 ): Promise<HuddleParticipant> {
-  const res = await fetch(`${API_BASE}/huddles/${roomId}/join`, {
+  const res = await apiFetch(`${API_BASE}/huddles/${roomId}/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ display_name: displayName }),
@@ -437,7 +446,7 @@ export async function joinHuddle(
 }
 
 export async function leaveHuddle(roomId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/huddles/${roomId}/leave`, { method: "POST" });
+  const res = await apiFetch(`${API_BASE}/huddles/${roomId}/leave`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -449,7 +458,7 @@ export async function updateHuddleSpeaking(
   isSpeaking: boolean,
   isMuted?: boolean
 ): Promise<HuddleParticipant> {
-  const res = await fetch(`${API_BASE}/huddles/${roomId}/speaking`, {
+  const res = await apiFetch(`${API_BASE}/huddles/${roomId}/speaking`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_speaking: isSpeaking, is_muted: isMuted }),
@@ -462,7 +471,7 @@ export async function updateHuddleSpeaking(
 }
 
 export async function closeHuddle(roomId: string): Promise<HuddleRoom> {
-  const res = await fetch(`${API_BASE}/huddles/${roomId}/close`, { method: "POST" });
+  const res = await apiFetch(`${API_BASE}/huddles/${roomId}/close`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
@@ -471,15 +480,17 @@ export async function closeHuddle(roomId: string): Promise<HuddleRoom> {
 }
 
 export async function deleteHuddle(roomId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/huddles/${roomId}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_BASE}/huddles/${roomId}`, { method: "DELETE" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
 }
 
-export function buildHuddleWsUrl(roomId: string, userId: string): string {
+export function buildHuddleWsUrl(roomId: string, _userId: string): string {
   const wsBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1")
     .replace(/^http/, "ws");
-  return `${wsBase}/huddles/${roomId}/ws?user_id=${encodeURIComponent(userId)}`;
+  // Identity comes from the verified token; the backend ignores user_id params.
+  const q = wsAuthQuery();
+  return `${wsBase}/huddles/${roomId}/ws${q ? `?${q}` : ""}`;
 }

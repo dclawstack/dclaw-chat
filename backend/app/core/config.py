@@ -13,6 +13,29 @@ class Settings(BaseSettings):
     APP_NAME: str = "DClaw Chat"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
+    # Deployment marker. Set ENVIRONMENT=production in prod so the startup guard
+    # below can refuse to boot with the DEBUG dev-user Owner backdoor enabled.
+    ENVIRONMENT: str = "development"
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() in {"production", "prod"}
+
+    def assert_safe_for_environment(self) -> None:
+        """Fail closed: prod must never run with DEBUG on (T3-07).
+
+        In DEBUG mode an unauthenticated request resolves to a dev-user with the
+        Owner role, which is an open admin backdoor. Refuse to start prod if it
+        is ever enabled.
+        """
+        if self.is_production and self.DEBUG:
+            raise RuntimeError(
+                "Refusing to start: DEBUG=true with ENVIRONMENT=production. "
+                "DEBUG grants an unauthenticated Owner dev-user — never enable it in production."
+            )
+
+    # Admin: fail-closed gate for destructive seed/clear endpoints
+    admin_enabled: bool = False
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_chat"
@@ -20,6 +43,7 @@ class Settings(BaseSettings):
     # Auth (Logto)
     LOGTO_ENDPOINT: str = ""
     LOGTO_AUDIENCE: str = ""
+    LOGTO_ISSUER: str = ""
     LOGTO_JWKS_URL: str = ""
 
     # AI

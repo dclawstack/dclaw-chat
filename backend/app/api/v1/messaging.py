@@ -2,22 +2,24 @@ import uuid
 import json
 import asyncio
 import logging
+import mimetypes
 from typing import List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, update, or_, func as sa_func
 from pydantic import BaseModel, field_validator
 
 from app.core.database import get_db, async_session
-from app.core.deps import get_current_user, CurrentUser
+from app.core.deps import get_current_user, CurrentUser, authenticate_websocket
 from app.models.channel import ChannelORM, ChannelMessageORM
 from app.models.bot import BotORM
+from app.models.workspace import WorkspaceMemberORM
 from app.services.messaging import manager
 from app.services.ollama_service import OllamaService, OLLAMA_MODELS
-from app.services.files import file_service, extract_urls
+from app.services.files import file_service, extract_urls, INLINE_SAFE_MIMES
 from app.services.command_parser import parse_command, execute_command
 from app.schemas.chat import Message as ChatMessage
 
@@ -31,6 +33,7 @@ class ChannelOut(BaseModel):
     id: str
     name: str
     type: str
+    workspace_id: Optional[str] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -71,6 +74,7 @@ class ChannelTopicOut(BaseModel):
 class CreateChannelRequest(BaseModel):
     name: str
     type: str = "public"
+    workspace_id: Optional[str] = None
 
 
 class SendMessageRequest(BaseModel):
@@ -101,6 +105,35 @@ def _classify_topic(content: str) -> str:
     return best if scores[best] > 0 else "general"
 
 
+# ── Workspace access (T2-06/T2-07) ───────────────────────────────────────────
+
+async def _is_workspace_member(db: AsyncSession, workspace_id: str, user_id: str) -> bool:
+    result = await db.execute(
+        select(WorkspaceMemberORM.id).where(
+            WorkspaceMemberORM.workspace_id == workspace_id,
+            WorkspaceMemberORM.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def _require_channel_access(
+    db: AsyncSession, channel_id: str, user: CurrentUser
+) -> Optional[ChannelORM]:
+    """403 unless the caller may touch this channel.
+
+    NULL workspace_id = legacy/global channel, open to any authenticated user.
+    A missing channel returns None (some routes auto-create/seed)."""
+    channel = await db.get(ChannelORM, channel_id)
+    if channel is None:
+        return None
+    if channel.workspace_id and not await _is_workspace_member(
+        db, channel.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this channel's workspace")
+    return channel
+
+
 # ── REST endpoints ────────────────────────────────────────────────────────────
 
 DEFAULT_CHANNELS = ["general", "engineering", "random"]
@@ -111,7 +144,20 @@ async def list_channels(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    result = await db.execute(select(ChannelORM).order_by(ChannelORM.created_at))
+    # Visible: legacy/global channels + channels of workspaces I belong to
+    my_workspaces = select(WorkspaceMemberORM.workspace_id).where(
+        WorkspaceMemberORM.user_id == user.user_id
+    )
+    result = await db.execute(
+        select(ChannelORM)
+        .where(
+            or_(
+                ChannelORM.workspace_id.is_(None),
+                ChannelORM.workspace_id.in_(my_workspaces),
+            )
+        )
+        .order_by(ChannelORM.created_at)
+    )
     channels = list(result.scalars().all())
     if not channels:
         channels = [ChannelORM(id=str(uuid.uuid4()), name=n) for n in DEFAULT_CHANNELS]
@@ -129,7 +175,16 @@ async def create_channel(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    channel = ChannelORM(id=str(uuid.uuid4()), name=req.name, type=req.type)
+    if req.workspace_id and not await _is_workspace_member(
+        db, req.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this workspace")
+    channel = ChannelORM(
+        id=str(uuid.uuid4()),
+        name=req.name,
+        type=req.type,
+        workspace_id=req.workspace_id,
+    )
     db.add(channel)
     await db.commit()
     await db.refresh(channel)
@@ -144,6 +199,7 @@ async def list_messages(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     result = await db.execute(
         select(ChannelMessageORM)
         .where(
@@ -164,6 +220,7 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     msg = ChannelMessageORM(
         id=str(uuid.uuid4()),
         channel_id=channel_id,
@@ -176,9 +233,12 @@ async def send_message(
     )
     db.add(msg)
     if req.thread_parent_id:
-        parent = await db.get(ChannelMessageORM, req.thread_parent_id)
-        if parent:
-            parent.reply_count += 1
+        # Atomic increment avoids lost updates under concurrent replies.
+        await db.execute(
+            update(ChannelMessageORM)
+            .where(ChannelMessageORM.id == req.thread_parent_id)
+            .values(reply_count=ChannelMessageORM.reply_count + 1)
+        )
     await db.commit()
     await db.refresh(msg)
     await manager.broadcast(channel_id, _msg_to_dict(msg))
@@ -195,6 +255,7 @@ async def get_thread(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     result = await db.execute(
         select(ChannelMessageORM)
         .where(ChannelMessageORM.thread_parent_id == message_id)
@@ -207,17 +268,35 @@ async def get_thread(
 async def upload_file(
     channel_id: str,
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     return await file_service.save_upload(file)
 
 
 @router.get("/files/{file_id}/{filename}")
-async def serve_file(file_id: str, filename: str):
+async def serve_file(
+    file_id: str,
+    filename: str,
+    user: CurrentUser = Depends(get_current_user),
+):
     path = file_service.file_path(file_id, filename)
     if not path:
         raise HTTPException(404, "File not found")
-    return FileResponse(path)
+    guessed = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    media_type = guessed if guessed in INLINE_SAFE_MIMES else "application/octet-stream"
+    # Always download, never render: uploads on the API origin must not be
+    # able to execute (stored-XSS via SVG/HTML). path.name was sanitized to
+    # [\w.-] at upload time, so it is header-safe.
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{path.name}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post("/unfurl")
@@ -234,6 +313,7 @@ async def get_channel_topics(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     result = await db.execute(
         select(ChannelMessageORM.topic, sa_func.count(ChannelMessageORM.id).label("count"))
         .where(
@@ -254,6 +334,7 @@ async def delete_topic(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     from sqlalchemy import update
     await db.execute(
         update(ChannelMessageORM)
@@ -273,6 +354,7 @@ async def get_topic_summary(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    await _require_channel_access(db, channel_id, user)
     result = await db.execute(
         select(ChannelMessageORM)
         .where(
@@ -440,9 +522,11 @@ async def _generate_ai_reply(
             )
             db.add(ai_msg)
             if thread_parent_id:
-                parent = await db.get(ChannelMessageORM, thread_parent_id)
-                if parent:
-                    parent.reply_count += 1
+                await db.execute(
+                    update(ChannelMessageORM)
+                    .where(ChannelMessageORM.id == thread_parent_id)
+                    .values(reply_count=ChannelMessageORM.reply_count + 1)
+                )
             await db.commit()
             await db.refresh(ai_msg)
 
@@ -464,9 +548,25 @@ async def _generate_ai_reply(
 async def websocket_endpoint(
     websocket: WebSocket,
     channel_id: str,
-    user_id: str = "dev-user",
-    user_name: str = "You",
 ):
+    auth = authenticate_websocket(websocket)
+    if auth is None:
+        await websocket.close(code=1008)
+        return
+    user_id, user_name = auth
+
+    # T2-07: authenticated ≠ authorized — workspace-scoped channels require
+    # membership before the socket may join the room.
+    async with async_session() as db:
+        channel = await db.get(ChannelORM, channel_id)
+        if (
+            channel is not None
+            and channel.workspace_id
+            and not await _is_workspace_member(db, channel.workspace_id, user_id)
+        ):
+            await websocket.close(code=1008)
+            return
+
     await manager.connect(websocket, user_id)
     manager.subscribe(channel_id, user_id)
 
@@ -513,9 +613,11 @@ async def websocket_endpoint(
                     )
                     db.add(msg)
                     if data.get("thread_parent_id"):
-                        parent = await db.get(ChannelMessageORM, data["thread_parent_id"])
-                        if parent:
-                            parent.reply_count += 1
+                        await db.execute(
+                            update(ChannelMessageORM)
+                            .where(ChannelMessageORM.id == data["thread_parent_id"])
+                            .values(reply_count=ChannelMessageORM.reply_count + 1)
+                        )
                     await db.commit()
                     await db.refresh(msg)
                     hist_result = await db.execute(

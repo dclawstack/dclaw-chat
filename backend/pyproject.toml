@@ -16,6 +16,12 @@ dependencies = [
     "cryptography>=42.0.0",
     "greenlet>=3.5.0",
     "pypdf>=6.11.0",
+    "slowapi>=0.1.9",
+    "redis>=5.0.0",
+    "sentry-sdk>=2.0.0",
+    "structlog>=24.1.0",
+    "flagsmith>=3.6.0",
+    "mypy>=1.8",
 ]
 
 [project.optional-dependencies]

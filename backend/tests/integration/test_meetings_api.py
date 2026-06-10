@@ -39,6 +39,33 @@ async def test_get_meeting_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_get_meeting_idor_blocked(client):
+    """A user cannot read another user's meeting (consensus #6)."""
+    from app.main import app
+    from app.core.deps import get_current_user, CurrentUser
+
+    # Created by the default test user (test-user-123).
+    created = await client.post("/api/v1/meetings", json={"title": "Private"})
+    mid = created.json()["id"]
+
+    # Switch identity to a different user and attempt to read it.
+    async def _other_user():
+        return CurrentUser(user_id="attacker-999", email="evil@x.io", role="Owner")
+
+    # Capture the live override so we can restore it without re-importing
+    # conftest. A fresh `tests.conftest` import re-executes the module, building
+    # a second in-memory engine and rebinding get_db to an empty DB, which makes
+    # every later test fail with "no such table".
+    original_override = app.dependency_overrides[get_current_user]
+    app.dependency_overrides[get_current_user] = _other_user
+    try:
+        response = await client.get(f"/api/v1/meetings/{mid}")
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides[get_current_user] = original_override
+
+
+@pytest.mark.asyncio
 async def test_update_meeting_title(client):
     created = await client.post("/api/v1/meetings", json={"title": "Old Title"})
     mid = created.json()["id"]

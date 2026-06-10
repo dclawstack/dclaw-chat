@@ -13,6 +13,14 @@ class ChannelORM(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(100))
     type: Mapped[str] = mapped_column(String(20), default="public")
+    # NULL = legacy/global channel (pre-tenancy); set = only that workspace's
+    # members may read, post, or join the channel's WebSocket.
+    workspace_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("workspaces.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     messages: Mapped[List["ChannelMessageORM"]] = relationship(

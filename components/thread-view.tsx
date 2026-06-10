@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { X, Send, Sparkles, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { TopicBadge } from "@/components/messaging/TopicBadge";
+import { apiFetch } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
@@ -53,7 +54,7 @@ export function ThreadView({
     setSummaryLoading(true);
     try {
       const topic = parent.topic || "general";
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/messaging/channels/${channelId}/topics/${encodeURIComponent(topic)}/summary`
       );
       const data = await res.json();

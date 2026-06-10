@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, async_session
-from app.core.deps import get_current_user, CurrentUser
+from app.core.deps import get_current_user, CurrentUser, authenticate_websocket
 from app.repositories.call_repo import CallRoomRepository
+from app.repositories.workspace_repo import is_workspace_member
 from app.schemas.call import CallRoomCreate, CallRoomOut
 
 router = APIRouter()
@@ -63,7 +64,9 @@ class SignalingManager:
         room = self._rooms.get(room_id, {})
         payload = json.dumps(message)
         dead: Set[str] = set()
-        for uid, ws in room.items():
+        # T3-03: snapshot first — a disconnect during an await would otherwise
+        # raise "dict changed size during iteration".
+        for uid, ws in list(room.items()):
             if uid == exclude:
                 continue
             try:
@@ -85,11 +88,16 @@ async def create_call_room(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    if req.workspace_id and not await is_workspace_member(
+        db, req.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this workspace")
     repo = CallRoomRepository(db)
     room = await repo.create(
         title=req.title,
         host_id=user.user_id,
         channel_id=req.channel_id,
+        workspace_id=req.workspace_id,
         max_participants=min(req.max_participants, 50),
         recording_enabled=req.recording_enabled,
     )
@@ -103,9 +111,7 @@ async def list_call_rooms(
     user: CurrentUser = Depends(get_current_user),
 ):
     repo = CallRoomRepository(db)
-    rooms = await repo.list_active(channel_id=channel_id)
-    # Only surface rooms that have at least one live WebSocket participant
-    return [r for r in rooms if _signaling.participant_count(r.id) > 0]
+    return await repo.list_active(channel_id=channel_id)
 
 
 @router.get("/{room_id}", response_model=CallRoomOut)
@@ -118,6 +124,10 @@ async def get_call_room(
     room = await repo.get_by_id(room_id)
     if not room:
         raise HTTPException(404, "Call room not found")
+    if room.workspace_id and not await is_workspace_member(
+        db, room.workspace_id, user.user_id
+    ):
+        raise HTTPException(403, "Not a member of this room's workspace")
     return room
 
 
@@ -160,10 +170,12 @@ async def delete_call_room(
 async def call_signaling(
     room_id: str,
     ws: WebSocket,
-    user_id: str = "anonymous",
     db: AsyncSession = Depends(get_db),
 ):
     """WebRTC signaling channel.
+
+    Identity is derived from a verified token (``?token=`` query param or
+    ``access_token`` cookie) — never from a client-supplied ``user_id``.
 
     Clients exchange JSON messages:
       offer     { type, sdp, target }       → forwarded to target peer
@@ -171,10 +183,23 @@ async def call_signaling(
       ice       { type, candidate, target } → forwarded to target peer
       Any other type is broadcast to all peers in the room.
     """
+    auth = authenticate_websocket(ws)
+    if auth is None:
+        await ws.close(code=1008, reason="Unauthorized")
+        return
+    user_id, _ = auth
+
     repo = CallRoomRepository(db)
     room = await repo.get_by_id(room_id)
     if not room or room.status == "ended":
         await ws.close(code=4004, reason="Room not found or ended")
+        return
+
+    # T2-07: authenticated ≠ authorized — workspace rooms require membership
+    if room.workspace_id and not await is_workspace_member(
+        db, room.workspace_id, user_id
+    ):
+        await ws.close(code=1008, reason="Not a member of this room's workspace")
         return
 
     if _signaling.participant_count(room_id) >= room.max_participants:

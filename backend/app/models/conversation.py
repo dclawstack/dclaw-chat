@@ -14,6 +14,11 @@ class ConversationORM(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str] = mapped_column(String(255), default="New Conversation")
+    # Nullable for rows created before ownership existed; NULL-owner rows are
+    # treated as legacy-shared (same fail-open policy as meetings/calls).
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     folder: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -11,9 +11,16 @@ from app.schemas.conversation import (
 from app.repositories.conversation_repo import ConversationRepository
 from app.core.database import get_db
 from app.core.deps import get_current_user, CurrentUser
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ForbiddenException
 
 router = APIRouter()
+
+
+def _assert_owner(conversation, user: CurrentUser) -> None:
+    """403 on another user's conversation. NULL owner = legacy-shared row
+    (same fail-open policy as meetings/calls)."""
+    if conversation.created_by and conversation.created_by != user.user_id:
+        raise ForbiddenException("Not your conversation")
 
 
 @router.get("", response_model=List[ConversationOut])
@@ -22,7 +29,7 @@ async def list_conversations(
     user: CurrentUser = Depends(get_current_user),
 ):
     repo = ConversationRepository(db)
-    conversations = await repo.list_all()
+    conversations = await repo.list_all(owner_id=user.user_id)
     return [
         ConversationOut(
             id=c.id,
@@ -47,6 +54,7 @@ async def get_conversation(
     conversation = await repo.get_by_id(conversation_id)
     if not conversation:
         raise NotFoundException("Conversation not found")
+    _assert_owner(conversation, user)
     return ConversationDetailOut(
         id=conversation.id,
         title=conversation.title,
@@ -75,7 +83,7 @@ async def create_conversation(
     user: CurrentUser = Depends(get_current_user),
 ):
     repo = ConversationRepository(db)
-    conversation = await repo.create(req)
+    conversation = await repo.create(req, created_by=user.user_id)
     return ConversationOut(
         id=conversation.id,
         title=conversation.title,
@@ -98,6 +106,7 @@ async def update_conversation(
     conversation = await repo.get_by_id(conversation_id)
     if not conversation:
         raise NotFoundException("Conversation not found")
+    _assert_owner(conversation, user)
     updated = await repo.update(conversation, req)
     return ConversationOut(
         id=updated.id,
@@ -120,5 +129,6 @@ async def delete_conversation(
     conversation = await repo.get_by_id(conversation_id)
     if not conversation:
         raise NotFoundException("Conversation not found")
+    _assert_owner(conversation, user)
     await repo.delete(conversation)
     return None

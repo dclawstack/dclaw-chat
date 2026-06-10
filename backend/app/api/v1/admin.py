@@ -11,11 +11,14 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.deps import require_role
+from app.core.ratelimit import limiter
 from app.models.bot import BotORM
 from app.models.call import CallRoomORM
 from app.models.channel import ChannelMessageORM, ChannelORM
@@ -24,9 +27,26 @@ from app.models.huddle import HuddleParticipantORM, HuddleRoomORM
 from app.models.meeting import MeetingORM
 from app.models.message import MessageORM
 
-router = APIRouter()
-
 SEED_MARKER = "demo-seed"
+
+
+def _require_admin_enabled() -> None:
+    """Fail-closed flag gate for the destructive admin endpoints.
+
+    Returns 404 (rather than 403) unless ADMIN_ENABLED is explicitly set, so the
+    endpoints are effectively invisible in any environment that hasn't opted in.
+    Declared first in the router dependencies so a disabled deployment stays 404
+    for everyone, before any auth is attempted.
+    """
+    if not get_settings().admin_enabled:
+        raise HTTPException(status_code=404)
+
+
+# T2-09: these endpoints seed/wipe the whole database. The flag alone is not
+# authorization — require a real, signed-token Owner on top of it.
+router = APIRouter(
+    dependencies=[Depends(_require_admin_enabled), Depends(require_role("Owner"))]
+)
 
 
 def _uid() -> str:
@@ -429,7 +449,8 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
 
 
 @router.post("/clear")
-async def clear_all_data(db: AsyncSession = Depends(get_db)) -> dict:
+@limiter.limit("5/minute")
+async def clear_all_data(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
     """Wipe all data from every table — both demo and user-created."""
     counts = await _wipe_all(db)
     await db.commit()

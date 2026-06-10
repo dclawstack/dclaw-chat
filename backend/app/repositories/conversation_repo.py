@@ -1,6 +1,6 @@
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 import uuid
 
@@ -21,21 +21,33 @@ class ConversationRepository:
         return result.scalar_one_or_none()
 
     async def list_all(
-        self, limit: int = 100, offset: int = 0
+        self, limit: int = 100, offset: int = 0, owner_id: Optional[str] = None
     ) -> List[ConversationORM]:
-        result = await self.db.execute(
+        query = (
             select(ConversationORM)
             .options(selectinload(ConversationORM.messages))
             .order_by(ConversationORM.updated_at.desc())
             .limit(limit)
             .offset(offset)
         )
+        if owner_id is not None:
+            # NULL created_by = legacy rows from before ownership existed
+            query = query.where(
+                or_(
+                    ConversationORM.created_by == owner_id,
+                    ConversationORM.created_by.is_(None),
+                )
+            )
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def create(self, data: ConversationCreate) -> ConversationORM:
+    async def create(
+        self, data: ConversationCreate, created_by: Optional[str] = None
+    ) -> ConversationORM:
         conversation = ConversationORM(
             id=data.id or str(uuid.uuid4()),
             title=data.title or "New Conversation",
+            created_by=created_by,
             folder=data.folder,
             model=data.model,
         )
