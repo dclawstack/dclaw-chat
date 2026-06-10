@@ -18,7 +18,8 @@ OPENROUTER_MODELS = {
 
 class OpenRouterService:
     def __init__(self, api_key: str = None, base_url: str = None):
-        self.api_key = api_key or settings.OPENROUTER_API_KEY
+        # None = use configured key; an explicit "" means key-less on purpose
+        self.api_key = api_key if api_key is not None else settings.OPENROUTER_API_KEY
         self.base_url = base_url or settings.OPENROUTER_URL
 
     async def chat(

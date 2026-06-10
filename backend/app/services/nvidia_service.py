@@ -17,7 +17,8 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 class NvidiaService:
     def __init__(self, api_key: str = None, base_url: str = None):
-        self.api_key = api_key or settings.NVIDIA_API_KEY
+        # None = use configured key; an explicit "" means key-less on purpose
+        self.api_key = api_key if api_key is not None else settings.NVIDIA_API_KEY
         self.base_url = base_url or NVIDIA_BASE_URL
 
     async def chat(
