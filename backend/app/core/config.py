@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     WHISPER_API_URL: str = "https://api.openai.com/v1"
 
+    # Billing (Stripe) — all empty by default; billing endpoints return 503
+    # "billing not configured" until these are set. Config-only enablement.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_PRO: str = ""
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3002,http://localhost:1420"
 

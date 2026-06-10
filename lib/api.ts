@@ -609,3 +609,44 @@ export async function getCatchMeUp(
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Billing (Stripe per-seat subscriptions — Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceBilling {
+  workspace_id: string;
+  plan: "free" | "pro";
+  status: "inactive" | "active" | "past_due" | "canceled";
+  seats: number;
+}
+
+export async function getBilling(workspaceId: string): Promise<WorkspaceBilling> {
+  const res = await apiFetch(`${API_BASE}/billing/workspaces/${workspaceId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Start a Stripe Checkout for the Pro plan. Returns `null` when the backend
+ * has no Stripe keys configured (HTTP 503) so callers can hide billing UI.
+ */
+export async function startCheckout(
+  workspaceId: string,
+  returnUrl: string
+): Promise<{ checkout_url: string } | null> {
+  const res = await apiFetch(`${API_BASE}/billing/workspaces/${workspaceId}/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ return_url: returnUrl }),
+  });
+  if (res.status === 503) return null; // billing not configured
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}

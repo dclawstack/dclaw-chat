@@ -11,6 +11,7 @@ from app.api.v1.bots import router as bots_router
 from app.api.v1.calls import router as calls_router
 from app.api.v1.huddles import router as huddles_router
 from app.api.v1.workspaces import router as workspaces_router
+from app.api.v1.billing import router as billing_router
 from app.api.v1.graph import router as graph_router
 from app.api.v1.admin import router as admin_router  # demo seed/clear — remove with admin.py
 
@@ -26,5 +27,6 @@ api_router.include_router(bots_router, prefix="/bots", tags=["bots"])
 api_router.include_router(calls_router, prefix="/calls", tags=["calls"])
 api_router.include_router(huddles_router, prefix="/huddles", tags=["huddles"])
 api_router.include_router(workspaces_router, prefix="/workspaces", tags=["workspaces"])
+api_router.include_router(billing_router, prefix="/billing", tags=["billing"])
 api_router.include_router(graph_router, prefix="/graph", tags=["graph"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])  # demo seed/clear — remove with admin.py

@@ -5,6 +5,7 @@ import { Conversation } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CatchMeUp } from "@/components/graph/CatchMeUp";
+import { UpgradeButton } from "@/components/billing/UpgradeButton";
 import { AuthUserButton } from "@/components/auth/UserButton";
 import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
@@ -192,6 +193,8 @@ function CatchMeUpSection() {
               ))}
             </select>
           )}
+
+          {currentId && <UpgradeButton workspaceId={currentId} />}
 
           {currentId ? (
             <CatchMeUp workspaceId={currentId} />
