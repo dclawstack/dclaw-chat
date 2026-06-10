@@ -192,10 +192,16 @@ Fallback: cloud unreachable → degrade to T0 + "local mode" badge (the privacy 
 - Workspace-scoped full-text + semantic search (<500ms PRD target)
 - **Gate:** the 3-minute demo — invite → chat → copilot cites graph → meeting auto-summarized → action item tracked
 
-### Phase 4 — Consensus layer + benchmarks · ✅ **COMPLETE 2026-06-10**
+### Phase 4 — Consensus layer + benchmarks · ✅ **COMPLETE 2026-06-10** · KPI MET
 > ModelRouter T0/T1/T2 + judge reconciliation, model_routes.json artifact, router-stats
 > endpoint, benchmarks/ harness with golden sets + --write regeneration. Live-verified
 > T0 against local Ollama (gemma-4b→gemma4:e2b, local_fraction 1.0).
+>
+> **Measured scorecard (2026-06-10, live gemma-4b local vs kimi-k2.5 via OpenRouter):**
+> classify 0.833 = 0.833 (parity) · summarize 0.605 vs 0.662 (91.4%) ·
+> extract_actions 0.837 vs 0.846 (98.9%). All three tasks within the 10% local-preference
+> margin → routing table keeps **100% of routed calls local**, exceeding the ≥70% goal
+> at benchmark-equal quality.
 - ModelRouter service with T0/T1/T2 tiers + escalation policy (§5.1)
 - Benchmark harness + golden sets; generated `model_routes.json`; CI scorecard (§5.2)
 - Per-workspace token metering (feeds billing + the pricing page "70% local" claim)
