@@ -126,15 +126,14 @@ def auth_check(env: dict) -> bool:
 def billing_check(env: dict) -> bool:
     try:
         import stripe
-        stripe.api_key = env["STRIPE_SECRET_KEY"]
-        stripe.Account.retrieve()
-        record("billing:key", True)
-        price = stripe.Price.retrieve(env["STRIPE_PRICE_PRO"])
-        ok = bool(price.get("recurring"))
-        record("billing:price", ok, "recurring per-seat" if ok else "price is not recurring")
+        client = stripe.StripeClient(env["STRIPE_SECRET_KEY"])
+        # retrieving the price proves both the key and the price id
+        price = client.v1.prices.retrieve(env["STRIPE_PRICE_PRO"])
+        ok = bool(price.recurring)
+        record("billing:key+price", ok, "recurring per-seat" if ok else "price is not recurring")
         return ok
     except Exception as e:
-        record("billing", False, str(e)[:80])
+        record("billing", False, f"{type(e).__name__}: {str(e)[:70]}")
         return False
 
 

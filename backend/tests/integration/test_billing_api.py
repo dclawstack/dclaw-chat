@@ -85,9 +85,10 @@ async def test_get_billing_non_member_403(client):
 
 
 @pytest.mark.asyncio
-async def test_checkout_503_when_stripe_key_unset(client):
+async def test_checkout_503_when_stripe_key_unset(client, monkeypatch):
     wid = await _make_workspace(client)
-    assert get_settings().STRIPE_SECRET_KEY == ""
+    # Explicitly clear: a real key may exist in the developer's environment
+    monkeypatch.setattr(get_settings(), "STRIPE_SECRET_KEY", "")
     resp = await client.post(
         f"/api/v1/billing/workspaces/{wid}/checkout",
         json={"return_url": "http://localhost:3000"},
@@ -180,8 +181,9 @@ async def test_checkout_plain_member_403(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_webhook_503_when_secret_unset(client):
-    assert get_settings().STRIPE_WEBHOOK_SECRET == ""
+async def test_webhook_503_when_secret_unset(client, monkeypatch):
+    # Explicitly clear: a real secret may exist in the developer's environment
+    monkeypatch.setattr(get_settings(), "STRIPE_WEBHOOK_SECRET", "")
     resp = await client.post(
         "/api/v1/billing/webhook",
         content=b"{}",
