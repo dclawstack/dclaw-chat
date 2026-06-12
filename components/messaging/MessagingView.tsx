@@ -54,6 +54,17 @@ function ChannelList({ channels, activeId, onSelect, onAdd, onDelete }: ChannelL
           <Button size="sm" className="h-7 px-2 text-xs" onClick={handleAdd}>Add</Button>
         </div>
       )}
+      {channels.length === 0 && !adding && (
+        <div className="px-3 py-2">
+          <button
+            onClick={() => setAdding(true)}
+            className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-md border border-dashed border-border text-xs text-muted-foreground hover:text-foreground hover:border-dclaw-500 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create your first channel
+          </button>
+        </div>
+      )}
       {channels.map((ch) => (
         <div key={ch.id} className="group relative">
           <button onClick={() => onSelect(ch.id)}
