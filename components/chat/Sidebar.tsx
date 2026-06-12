@@ -9,6 +9,11 @@ import { UpgradeButton } from "@/components/billing/UpgradeButton";
 import { AuthUserButton } from "@/components/auth/UserButton";
 import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
+  createWorkspace,
+  createWorkspaceInvite,
+  acceptWorkspaceInvite,
+} from "@/lib/api";
+import {
   Plus,
   MessageSquare,
   Trash2,
@@ -159,7 +164,52 @@ export function Sidebar({
 
 function CatchMeUpSection() {
   const [expanded, setExpanded] = useState(false);
-  const { workspaces, currentId, setCurrent, isLoading } = useWorkspaces();
+  const { workspaces, currentId, setCurrent, isLoading, refresh } = useWorkspaces();
+  const [newName, setNewName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [joinToken, setJoinToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreate = () =>
+    run(async () => {
+      const ws = await createWorkspace(newName.trim() || "My Workspace");
+      setNewName("");
+      await refresh();
+      setCurrent(ws.id);
+    });
+
+  const handleInvite = () =>
+    run(async () => {
+      if (!currentId) return;
+      const invite = await createWorkspaceInvite(
+        currentId,
+        inviteEmail.trim() || "teammate@example.com"
+      );
+      setInviteEmail("");
+      setInviteToken(invite.token);
+    });
+
+  const handleJoin = () =>
+    run(async () => {
+      const accepted = await acceptWorkspaceInvite(joinToken.trim());
+      setJoinToken("");
+      await refresh();
+      setCurrent(accepted.workspace_id);
+    });
 
   return (
     <div className="border-t px-3 py-2">
@@ -194,6 +244,77 @@ function CatchMeUpSection() {
             </select>
           )}
 
+          {/* Create a workspace */}
+          <div className="flex gap-1">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="New workspace name"
+              aria-label="New workspace name"
+              className="flex-1 h-7 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-dclaw-500"
+            />
+            <button
+              onClick={handleCreate}
+              disabled={busy}
+              className="h-7 px-2 rounded-md bg-dclaw-500 text-white text-xs font-medium hover:bg-dclaw-600 disabled:opacity-50"
+            >
+              Create
+            </button>
+          </div>
+
+          {/* Join via invite token */}
+          <div className="flex gap-1">
+            <input
+              value={joinToken}
+              onChange={(e) => setJoinToken(e.target.value)}
+              placeholder="Paste invite token to join"
+              aria-label="Invite token"
+              className="flex-1 h-7 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-dclaw-500"
+            />
+            <button
+              onClick={handleJoin}
+              disabled={busy || !joinToken.trim()}
+              className="h-7 px-2 rounded-md border border-border text-xs font-medium hover:bg-accent disabled:opacity-50"
+            >
+              Join
+            </button>
+          </div>
+
+          {/* Invite a teammate (members of the selected workspace) */}
+          {currentId && (
+            <div className="space-y-1">
+              <div className="flex gap-1">
+                <input
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Teammate email"
+                  aria-label="Teammate email"
+                  className="flex-1 h-7 rounded-md border border-border bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-dclaw-500"
+                />
+                <button
+                  onClick={handleInvite}
+                  disabled={busy}
+                  className="h-7 px-2 rounded-md border border-border text-xs font-medium hover:bg-accent disabled:opacity-50"
+                >
+                  Invite
+                </button>
+              </div>
+              {inviteToken && (
+                <button
+                  onClick={() => navigator.clipboard?.writeText(inviteToken)}
+                  title="Click to copy — teammate pastes this into 'Join'"
+                  className="w-full text-left px-2 py-1 rounded-md bg-accent text-[10px] font-mono break-all hover:opacity-80"
+                >
+                  {inviteToken}
+                </button>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <p className="px-2 text-xs text-red-500 leading-snug">{error}</p>
+          )}
+
           {currentId && <UpgradeButton workspaceId={currentId} />}
 
           {currentId ? (
@@ -202,7 +323,7 @@ function CatchMeUpSection() {
             <p className="px-2 text-xs text-muted-foreground leading-relaxed">
               {isLoading
                 ? "Loading workspaces…"
-                : "Join a workspace to build your team's memory."}
+                : "Create a workspace to build your team's memory."}
             </p>
           )}
         </div>

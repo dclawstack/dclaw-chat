@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { TopicBadge } from "./TopicBadge";
 import { Hash, Plus, Send, Wifi, WifiOff, Loader2, Tag, X, Paperclip, Images, Trash2 } from "lucide-react";
 import { StartCallButton } from "@/components/calls/StartCallButton";
+import { useWorkspaces } from "@/lib/useWorkspaces";
 import { apiFetch } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -163,6 +164,7 @@ export function MessagingView() {
   const [hiddenTopics, setHiddenTopics] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const unfurlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { currentId: currentWorkspaceId } = useWorkspaces();
 
   const activeChannel = channels.find((c) => c.id === activeChannelId);
   const { messages, typingUsers, connected, sendMessage, startTyping, stopTyping } =
@@ -183,25 +185,42 @@ export function MessagingView() {
   useEffect(() => {
     apiFetch(`${API_BASE}/messaging/channels`)
       .then((r) => r.json())
-      .then((data: Channel[]) => {
-        setChannels(data);
-        if (data.length > 0) setActiveChannelId(data[0].id);
-      })
+      .then((data: Channel[]) => setChannels(data))
       .catch(() => {})
       .finally(() => setLoadingChannels(false));
   }, []);
 
+  // Scope the channel list to the selected workspace. With a workspace active,
+  // only its channels show (so messages always feed that workspace's graph);
+  // with none selected, the global/legacy channels are shown.
+  const visibleChannels = useMemo(
+    () =>
+      currentWorkspaceId
+        ? channels.filter((c) => c.workspace_id === currentWorkspaceId)
+        : channels.filter((c) => !c.workspace_id),
+    [channels, currentWorkspaceId]
+  );
+
+  useEffect(() => {
+    if (visibleChannels.length > 0 && !visibleChannels.some((c) => c.id === activeChannelId)) {
+      setActiveChannelId(visibleChannels[0].id);
+    } else if (visibleChannels.length === 0) {
+      setActiveChannelId(null);
+    }
+  }, [visibleChannels, activeChannelId]);
+
   const handleAddChannel = useCallback(async (name: string) => {
+    // Bind new channels to the active workspace so messages feed its graph
     const res = await apiFetch(`${API_BASE}/messaging/channels`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, workspace_id: currentWorkspaceId }),
     });
     if (res.ok) {
       const ch: Channel = await res.json();
       setChannels((prev) => [...prev, ch]);
       setActiveChannelId(ch.id);
     }
-  }, []);
+  }, [currentWorkspaceId]);
 
   const handleDeleteChannel = useCallback(async (id: string) => {
     await apiFetch(`${API_BASE}/messaging/channels/${id}`, { method: "DELETE" }).catch(() => {});
@@ -309,7 +328,7 @@ export function MessagingView() {
             </div>
           ) : (
             <>
-              <ChannelList channels={channels} activeId={activeChannelId}
+              <ChannelList channels={visibleChannels} activeId={activeChannelId}
                 onSelect={setActiveChannelId} onAdd={handleAddChannel} onDelete={handleDeleteChannel} />
               <TopicsPanel topics={topics} activeTopic={activeTopic} onSelect={setActiveTopic} onDelete={handleDeleteTopic} />
             </>

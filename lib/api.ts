@@ -526,6 +526,54 @@ export async function listWorkspaces(): Promise<Workspace[]> {
   return res.json();
 }
 
+export async function createWorkspace(name: string): Promise<Workspace> {
+  const res = await apiFetch(`${API_BASE}/workspaces`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface WorkspaceInvite {
+  token: string;
+  workspace_id: string;
+  email: string;
+}
+
+export async function createWorkspaceInvite(
+  workspaceId: string,
+  email: string
+): Promise<WorkspaceInvite> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/invites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function acceptWorkspaceInvite(
+  token: string
+): Promise<{ workspace_id: string; role: string }> {
+  const res = await apiFetch(`${API_BASE}/workspaces/invites/${token}/accept`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // ── Workspace Knowledge Graph ─────────────────────────────────────────────────
 
 export interface GraphEntity {

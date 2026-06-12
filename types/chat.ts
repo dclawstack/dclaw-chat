@@ -42,6 +42,7 @@ export interface Channel {
   id: string;
   name: string;
   type: "public" | "dm" | "group";
+  workspace_id?: string | null;
   created_at: string;
 }
 
