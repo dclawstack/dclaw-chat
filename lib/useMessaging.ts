@@ -20,19 +20,35 @@ export function useMessaging({ channelId }: UseMessagingOptions) {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const connectedChannelRef = useRef<string | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
 
   const connect = useCallback((chId: string) => {
+    // Idempotent: don't tear down a live socket for the same channel — under
+    // React StrictMode the effect runs twice, which otherwise churns the
+    // connection faster than the server can send history (close 1006).
+    if (
+      connectedChannelRef.current === chId &&
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
     if (wsRef.current) {
       wsRef.current.close();
     }
+    connectedChannelRef.current = chId;
     const q = wsAuthQuery();
     const url = `${WS_BASE}/${chId}${q ? `?${q}` : ""}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
+    ws.onclose = () => {
+      setConnected(false);
+      if (connectedChannelRef.current === chId) connectedChannelRef.current = null;
+    };
 
     ws.onmessage = (evt) => {
       const data = JSON.parse(evt.data);
@@ -63,13 +79,14 @@ export function useMessaging({ channelId }: UseMessagingOptions) {
 
   useEffect(() => {
     if (!channelId) return;
-    setMessages([]);
-    setTypingUsers([]);
+    // Only reset + (re)connect when the channel actually changes. connect()
+    // tears down the prior socket itself, so we don't close on cleanup — that
+    // would fight React StrictMode's mount/unmount/mount and storm the server.
+    if (connectedChannelRef.current !== channelId) {
+      setMessages([]);
+      setTypingUsers([]);
+    }
     connect(channelId);
-    return () => {
-      wsRef.current?.close();
-      wsRef.current = null;
-    };
   }, [channelId, connect]);
 
   const sendMessage = useCallback(

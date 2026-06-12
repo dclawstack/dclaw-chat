@@ -204,13 +204,14 @@ export function MessagingView() {
   // Scope the channel list to the selected workspace. With a workspace active,
   // only its channels show (so messages always feed that workspace's graph);
   // with none selected, the global/legacy channels are shown.
-  const visibleChannels = useMemo(
-    () =>
-      currentWorkspaceId
-        ? channels.filter((c) => c.workspace_id === currentWorkspaceId)
-        : channels.filter((c) => !c.workspace_id),
-    [channels, currentWorkspaceId]
-  );
+  const visibleChannels = useMemo(() => {
+    const scoped = currentWorkspaceId
+      ? channels.filter((c) => c.workspace_id === currentWorkspaceId)
+      : channels.filter((c) => !c.workspace_id);
+    // De-dupe by name (stale duplicates can accrue from earlier retries)
+    const seen = new Set<string>();
+    return scoped.filter((c) => (seen.has(c.name) ? false : seen.add(c.name)));
+  }, [channels, currentWorkspaceId]);
 
   useEffect(() => {
     if (visibleChannels.length > 0 && !visibleChannels.some((c) => c.id === activeChannelId)) {
