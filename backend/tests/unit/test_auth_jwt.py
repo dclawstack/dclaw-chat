@@ -19,7 +19,13 @@ def rsa_keypair():
 
 
 def _set(monkeypatch, **kwargs):
-    """Override fields on the module-level settings used by decode_token."""
+    """Override fields on the module-level settings used by decode_token.
+
+    AUTH_* take precedence over LOGTO_* in the resolver, so they are cleared
+    by default — a developer's real Clerk env must not leak into these tests.
+    """
+    for key in ("AUTH_JWKS_URL", "AUTH_ISSUER", "AUTH_AUDIENCE"):
+        kwargs.setdefault(key, "")
     for key, value in kwargs.items():
         monkeypatch.setattr(deps.settings, key, value, raising=False)
 
