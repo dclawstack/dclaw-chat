@@ -31,7 +31,15 @@ export function useMessaging({ channelId, userId = "dev-user", userName = "You" 
     ws.onclose = () => setConnected(false);
 
     ws.onmessage = (evt) => {
-      const data = JSON.parse(evt.data);
+      // Guard against malformed frames — an unhandled JSON.parse throw inside
+      // the WebSocket onmessage handler would otherwise surface as an uncaught
+      // error. Ignore unparseable messages (matches CallRoom's handling).
+      let data: any;
+      try {
+        data = JSON.parse(evt.data);
+      } catch {
+        return;
+      }
       if (data.type === "history") {
         setMessages(data.messages);
       } else if (data.type === "message") {
