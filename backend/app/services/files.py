@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.core.ssrf import SSRFError, assert_url_safe
+
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -51,8 +53,13 @@ class FileService:
         }
 
     def file_path(self, file_id: str, filename: str) -> Optional[Path]:
-        p = UPLOAD_DIR / file_id / filename
-        return p if p.exists() else None
+        base = UPLOAD_DIR.resolve()
+        target = (base / file_id / filename).resolve()
+        # Reject any path that escapes the upload base dir (e.g. '..' traversal
+        # or absolute components in file_id / filename).
+        if not target.is_relative_to(base):
+            return None
+        return target if target.exists() else None
 
     def extract_text(self, file_id: str, filename: str, mime_type: str) -> str:
         """Extract readable text from an uploaded file for AI context (max 8 000 chars)."""
@@ -79,7 +86,11 @@ class FileService:
     async def unfurl(self, url: str) -> dict:
         base = {"type": "link", "url": url, "title": url, "description": "", "image": "", "favicon": ""}
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            assert_url_safe(url)
+        except SSRFError:
+            return base
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
                 resp = await client.get(url, headers={"User-Agent": "DClaw-Unfurler/1.0"})
                 if "text/html" not in resp.headers.get("content-type", ""):
                     return base

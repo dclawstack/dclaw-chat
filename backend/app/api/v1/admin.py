@@ -11,10 +11,11 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.bot import BotORM
 from app.models.call import CallRoomORM
@@ -29,6 +30,17 @@ router = APIRouter()
 SEED_MARKER = "demo-seed"
 
 
+def _require_admin_enabled() -> None:
+    """Fail-closed guard for destructive admin endpoints.
+
+    Returns 404 (rather than 403) unless ADMIN_ENABLED is explicitly set, so the
+    seed/clear endpoints are effectively invisible in any environment that hasn't
+    opted in. They wipe all data, so they must never be open by default.
+    """
+    if not get_settings().admin_enabled:
+        raise HTTPException(status_code=404)
+
+
 def _uid() -> str:
     return str(uuid.uuid4())
 
@@ -40,6 +52,7 @@ def _now() -> datetime:
 @router.post("/seed")
 async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
     """Populate the database with realistic demo data across every feature."""
+    _require_admin_enabled()
     # Clear first so seeding is idempotent
     await _wipe_all(db)
 
@@ -431,6 +444,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
 @router.post("/clear")
 async def clear_all_data(db: AsyncSession = Depends(get_db)) -> dict:
     """Wipe all data from every table — both demo and user-created."""
+    _require_admin_enabled()
     counts = await _wipe_all(db)
     await db.commit()
     return {"status": "cleared", "counts": counts}

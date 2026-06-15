@@ -8,6 +8,8 @@ from typing import Optional
 
 import httpx
 
+from app.core.ssrf import SSRFError, assert_url_safe
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +54,12 @@ async def dispatch_webhook(
         "user_name": user_name,
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        assert_url_safe(webhook_url)
+    except SSRFError as exc:
+        logger.warning("Blocked unsafe webhook URL %s: %s", webhook_url, exc)
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             resp = await client.post(webhook_url, json=payload)
             resp.raise_for_status()
             data = resp.json()
