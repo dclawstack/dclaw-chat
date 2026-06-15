@@ -17,15 +17,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.deps import require_role
+from app.core.deps import CurrentUser, get_current_user
 from app.core.ratelimit import limiter
 from app.models.bot import BotORM
 from app.models.call import CallRoomORM
 from app.models.channel import ChannelMessageORM, ChannelORM
 from app.models.conversation import ConversationORM
+from app.models.graph import GraphEdgeORM, GraphEntityORM
 from app.models.huddle import HuddleParticipantORM, HuddleRoomORM
 from app.models.meeting import MeetingORM
 from app.models.message import MessageORM
+from app.models.workspace import (
+    WorkspaceInviteORM,
+    WorkspaceMemberORM,
+    WorkspaceORM,
+)
 
 SEED_MARKER = "demo-seed"
 
@@ -42,10 +48,27 @@ def _require_admin_enabled() -> None:
         raise HTTPException(status_code=404)
 
 
+async def _require_seed_authorized(
+    user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Authorize the destructive seed/clear endpoints.
+
+    Default: require a real, signed-token Owner (T2-09). Demo escape hatch:
+    when ``admin_demo_open`` is set, any authenticated user is accepted so the
+    landing-page demo works without minting an Owner role. Production keeps
+    both ``admin_enabled`` and ``admin_demo_open`` False.
+    """
+    if get_settings().admin_demo_open:
+        return user
+    if user.role != "Owner":
+        raise HTTPException(status_code=403, detail="Owner role required")
+    return user
+
+
 # T2-09: these endpoints seed/wipe the whole database. The flag alone is not
-# authorization — require a real, signed-token Owner on top of it.
+# authorization — require Owner (or the opt-in demo mode) on top of it.
 router = APIRouter(
-    dependencies=[Depends(_require_admin_enabled), Depends(require_role("Owner"))]
+    dependencies=[Depends(_require_admin_enabled), Depends(_require_seed_authorized)]
 )
 
 
@@ -64,10 +87,14 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
     await _wipe_all(db)
 
     counts = {
+        "workspaces": 0,
+        "workspace_members": 0,
         "conversations": 0,
         "messages": 0,
         "channels": 0,
         "channel_messages": 0,
+        "graph_entities": 0,
+        "graph_edges": 0,
         "meetings": 0,
         "huddles": 0,
         "huddle_participants": 0,
@@ -76,6 +103,35 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
     }
 
     now = _now()
+
+    # ── Workspace + members (v2.0 multi-tenancy) ────────────────────────
+    # A demo workspace the seeded channels and knowledge graph belong to, so
+    # the team-memory features are visible immediately after seeding.
+    ws_id = _uid()
+    db.add(
+        WorkspaceORM(
+            id=ws_id,
+            name=f"{SEED_MARKER} Acme HQ",
+            created_by="demo-alice",
+            created_at=now - timedelta(days=8),
+        )
+    )
+    counts["workspaces"] += 1
+    for uid, role in [
+        ("demo-alice", "Owner"),
+        ("demo-bob", "Member"),
+        ("demo-sam", "Member"),
+    ]:
+        db.add(
+            WorkspaceMemberORM(
+                id=_uid(), workspace_id=ws_id, user_id=uid, role=role,
+                created_at=now - timedelta(days=8),
+            )
+        )
+        counts["workspace_members"] += 1
+    # Flush so the workspace row exists before channels/graph rows reference it
+    # (no ORM relationship declared, so the unit of work can't order the INSERTs).
+    await db.flush()
 
     # ── AI Conversations ────────────────────────────────────────────────
     conversations_data = [
@@ -244,6 +300,7 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
                 id=ch_id,
                 name=f"{SEED_MARKER}-{ch['name']}",
                 type=ch["type"],
+                workspace_id=ws_id,  # scope demo channels to the demo workspace
                 created_at=now - timedelta(days=7 - idx),
             )
         )
@@ -444,6 +501,51 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
         )
         counts["call_rooms"] += 1
 
+    # ── Workspace knowledge graph (v2.0 team memory) ────────────────────
+    # A small graph so "Catch me up" and copilot citations show real content
+    # the moment the demo workspace is opened.
+    graph_entities = [
+        ("person", "Alice", "Workspace owner; drove the v2 architecture."),
+        ("person", "Bob", "Owns the launch demo deck."),
+        ("person", "Sam", "Leads the Whisper STT integration."),
+        ("decision", "Ship v2.0 on Friday", "Agreed in #engineering on the release date."),
+        ("decision", "Local-first inference by default", "All AI runs on-device via Ollama."),
+        ("action_item", "Prepare launch demo deck", "Assigned to Bob ahead of Friday."),
+        ("action_item", "Finish Whisper STT pipeline", "Assigned to Sam for meeting summaries."),
+        ("topic", "WebRTC calls", "Browser-native voice/video work."),
+        ("topic", "Knowledge graph memory", "Per-workspace entity/edge extraction."),
+    ]
+    ent_ids: dict[str, str] = {}
+    for kind, name, summary in graph_entities:
+        eid = _uid()
+        ent_ids[name] = eid
+        db.add(
+            GraphEntityORM(
+                id=eid, workspace_id=ws_id, kind=kind, name=name, summary=summary,
+                source_type="message", source_id=_uid(),
+                created_at=now - timedelta(days=2), updated_at=now - timedelta(hours=3),
+            )
+        )
+        counts["graph_entities"] += 1
+    await db.flush()  # entities must exist before edges reference them
+
+    graph_edges = [
+        ("Alice", "Ship v2.0 on Friday", "decided_by"),
+        ("Bob", "Prepare launch demo deck", "assigned_to"),
+        ("Sam", "Finish Whisper STT pipeline", "assigned_to"),
+        ("Ship v2.0 on Friday", "WebRTC calls", "mentioned_with"),
+        ("Alice", "Knowledge graph memory", "discussed_in"),
+    ]
+    for src, dst, rel in graph_edges:
+        db.add(
+            GraphEdgeORM(
+                id=_uid(), workspace_id=ws_id,
+                src_id=ent_ids[src], dst_id=ent_ids[dst], relation=rel,
+                source_id=_uid(), created_at=now - timedelta(hours=3),
+            )
+        )
+        counts["graph_edges"] += 1
+
     await db.commit()
     return {"status": "seeded", "counts": counts}
 
@@ -462,6 +564,8 @@ async def _wipe_all(db: AsyncSession) -> dict:
     counts: dict[str, int] = {}
     # Order matters: child tables first to respect FKs even when CASCADE is set.
     for model, key in [
+        (GraphEdgeORM, "graph_edges"),
+        (GraphEntityORM, "graph_entities"),
         (MessageORM, "messages"),
         (ConversationORM, "conversations"),
         (ChannelMessageORM, "channel_messages"),
@@ -471,6 +575,9 @@ async def _wipe_all(db: AsyncSession) -> dict:
         (MeetingORM, "meetings"),
         (BotORM, "bots"),
         (CallRoomORM, "call_rooms"),
+        (WorkspaceInviteORM, "workspace_invites"),
+        (WorkspaceMemberORM, "workspace_members"),
+        (WorkspaceORM, "workspaces"),
     ]:
         result = await db.execute(delete(model))
         counts[key] = result.rowcount or 0

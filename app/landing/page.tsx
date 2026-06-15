@@ -4,6 +4,7 @@ import {
   Radio, Package, Mic, Brain, Lock, ArrowRight,
   CheckCircle, Star, ChevronRight, Globe, Cpu, Monitor,
   Palette, Sun, Moon, Settings as SettingsIcon, Sparkles,
+  Network, GitBranch, Scale, KeyRound, CreditCard, Building2,
 } from "lucide-react";
 // Demo seed/clear controls — isolated under components/landing/ for easy removal.
 import SeedControls from "@/components/landing/seed-controls";
@@ -83,7 +84,7 @@ function Navbar() {
           <span className="font-display text-sm font-bold text-white">DClaw Chat</span>
         </div>
         <div className="hidden items-center gap-6 md:flex">
-          {["Features", "Calls", "AI", "Security", "Personalize"].map((item) => (
+          {["Features", "Memory", "Calls", "AI", "Security"].map((item) => (
             <a
               key={item}
               href={`#${item.toLowerCase()}`}
@@ -118,19 +119,21 @@ function Hero() {
 
       <div className="mx-auto max-w-4xl px-6 text-center">
         <Badge>
-          <Star className="h-3 w-3" /> New: Light/Dark themes · WebRTC Calls · AI Meetings
+          <Star className="h-3 w-3" /> v2.0: Workspaces · Knowledge-Graph Memory · Multi-Model Consensus
         </Badge>
 
         <h1 className="mt-6 font-display text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl">
-          The AI-powered workspace
+          AI conversations
           <br />
-          <GradientText>your team deserves</GradientText>
+          <GradientText>that remember</GradientText>
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-dk-muted">
-          DClaw Chat combines real-time team messaging, voice & video calls,
-          AI conversations, and smart meeting summaries — all with enterprise-grade
-          privacy and local LLM support.
+          DClaw Chat is a privacy-first team workspace where every channel, call,
+          and meeting feeds a <span className="text-white">per-team knowledge graph</span>.
+          Ask the copilot anything and it answers with citations from your team's
+          own memory — powered by <span className="text-white">local LLMs</span> so
+          your data never leaves your hardware.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -153,9 +156,9 @@ function Hero() {
         {/* Stats row */}
         <div className="mt-16 grid grid-cols-3 gap-6 border-t border-white/8 pt-10">
           {[
-            { value: "10+", label: "AI Models" },
-            { value: "WebRTC", label: "Real-time Calls" },
-            { value: "100%", label: "Privacy First" },
+            { value: "100%", label: "LLM calls run local" },
+            { value: "Graph", label: "Team memory" },
+            { value: "Multi-tenant", label: "Workspaces & SSO" },
           ].map(({ value, label }) => (
             <div key={label} className="flex flex-col items-center gap-1">
               <span className="font-display text-3xl font-bold text-white">{value}</span>
@@ -185,6 +188,16 @@ function FeaturesGrid() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FeatureCard icon={Network} accent="blue" title="Workspace Knowledge Graph"
+            description="Every message, meeting, and decision is extracted into a per-team graph of people, topics, decisions, and action items — your team's living memory." />
+          <FeatureCard icon={Building2} accent="violet" title="Multi-tenant Workspaces"
+            description="Create workspaces, invite teammates by email, and scope every channel, call, and bot to its team. Strict membership isolation — zero cross-tenant access." />
+          <FeatureCard icon={Scale} accent="green" title="Multi-Model Consensus"
+            description="A router picks the cheapest capable model per task and escalates to a multi-model vote for high-stakes answers — benchmarked to keep ~100% of calls local at equal quality." />
+          <FeatureCard icon={KeyRound} accent="orange" title="SSO Authentication"
+            description="Sign in with Clerk-backed auth (RS256/JWKS verified). Real sessions, real identities, role-based access — no dev backdoors in production." />
+          <FeatureCard icon={CreditCard} accent="pink" title="Per-seat Billing"
+            description="Stripe-powered subscriptions billed per workspace seat. Free tier with capped AI; Pro unlocks the full consensus tier and unlimited graph memory." />
           <FeatureCard icon={Bot} accent="blue" title="AI Conversations"
             description="Chat with powerful local LLMs like Gemma, Kimi K2.5, and more. Swarm agents handle research, code, and memory automatically." />
           <FeatureCard icon={MessageSquare} accent="violet" title="Team Channels"
@@ -209,6 +222,85 @@ function FeaturesGrid() {
             description="Set your default model, tune temperature with a live slider, see the active API endpoint, and clear conversations — all from a single Settings dialog." />
           <FeatureCard icon={Sparkles} accent="green" title="Quick-start Suggestions"
             description="One-click prompt suggestions get you chatting in seconds. Auto-creates a fresh conversation so you can jump straight from idle to insight." />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Knowledge Graph section (v2.0 flagship) ────────────────────────────────────
+
+function KnowledgeGraphSection() {
+  const entities = [
+    { kind: "decision", label: "Ship v2.0 on Friday", color: "bg-green-600" },
+    { kind: "person", label: "Alice", color: "bg-blue-600" },
+    { kind: "action", label: "Prepare demo deck → Bob", color: "bg-orange-600" },
+    { kind: "topic", label: "WebRTC calls", color: "bg-violet-600" },
+  ];
+  return (
+    <section id="memory" className="py-24 bg-gradient-to-b from-transparent via-blue-950/10 to-transparent">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          {/* Text */}
+          <div>
+            <SectionLabel>Knowledge-Graph Memory</SectionLabel>
+            <h2 className="font-display text-4xl font-bold text-white">
+              Your team's memory, <GradientText>made queryable</GradientText>
+            </h2>
+            <p className="mt-4 leading-relaxed text-dk-muted">
+              As your team chats, a local model quietly extracts the people, topics,
+              decisions, and action items into a per-workspace knowledge graph. Ask
+              the copilot <span className="text-white">"what did we decide?"</span> and
+              it answers with citations that link straight back to the source message.
+            </p>
+            <ul className="mt-8 space-y-3">
+              <Check>Automatic entity & relationship extraction on every message</Check>
+              <Check>Copilot answers cite the graph — no hallucinated context</Check>
+              <Check>"Catch me up" surfaces decisions & action items since you left</Check>
+              <Check>Runs on a local model — your team's memory never leaves your network</Check>
+              <Check>Compounds with usage: the longer you use it, the smarter it gets</Check>
+            </ul>
+            <Link href="/app" className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors">
+              Explore your graph <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          {/* Mock graph + catch-me-up */}
+          <div className="rounded-2xl border border-white/8 bg-dk-surface-raised overflow-hidden shadow-dk-lg">
+            <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+              <GitBranch className="h-3.5 w-3.5 text-blue-400" />
+              <span className="text-xs font-medium text-white">Acme HQ · Catch me up</span>
+              <span className="ml-auto text-[10px] text-dk-muted">9 entities · 5 links</span>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* copilot answer with citations */}
+              <div className="flex gap-3">
+                <div className="h-7 w-7 shrink-0 rounded-full bg-blue-700 flex items-center justify-center text-xs font-bold">AI</div>
+                <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-dk-surface-elevated px-4 py-2.5 text-sm text-dk-body leading-relaxed">
+                  Your team decided to ship v2.0 on Friday. Bob owns the launch deck;
+                  Sam is finishing the Whisper pipeline.
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {entities.slice(0, 3).map((e) => (
+                      <span key={e.label} className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[9px] text-dk-muted">
+                        <span className={`h-1.5 w-1.5 rounded-full ${e.color}`} /> {e.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* graph node chips */}
+              <div className="rounded-xl border border-white/8 bg-dk-surface p-4">
+                <p className="mb-3 text-[9px] font-semibold uppercase tracking-widest text-dk-muted">Workspace graph</p>
+                <div className="flex flex-wrap gap-2">
+                  {entities.map((e) => (
+                    <span key={e.label} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-white">
+                      <span className={`h-2 w-2 rounded-full ${e.color}`} />
+                      {e.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -707,6 +799,7 @@ export default function LandingPage() {
         <Hero />
         <SeedControls />
         <FeaturesGrid />
+        <KnowledgeGraphSection />
         <CallsSection />
         <AISection />
         <ChannelsSection />

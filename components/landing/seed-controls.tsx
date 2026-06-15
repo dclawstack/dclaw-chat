@@ -68,8 +68,10 @@ export default function SeedControls() {
                 Try the app with sample data
               </h3>
               <p className="mt-1 text-sm text-dk-muted">
-                Seed populates conversations, channels, meetings, huddles, bots
-                and calls. Clear wipes everything for a fresh state.
+                Seed populates a demo workspace with members, a knowledge graph,
+                channels, conversations, meetings, huddles, bots and calls — so
+                you can see every feature at full capacity. Clear wipes everything
+                for a fresh state.
               </p>
             </div>
           </div>

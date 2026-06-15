@@ -36,6 +36,11 @@ class Settings(BaseSettings):
 
     # Admin: fail-closed gate for destructive seed/clear endpoints
     admin_enabled: bool = False
+    # Demo-only: when true (alongside admin_enabled), seed/clear accept any
+    # authenticated user instead of requiring role=Owner. Both default False so
+    # production stays locked. Intended for the landing-page demo; remove with
+    # the rest of the demo seed tooling.
+    admin_demo_open: bool = False
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_chat"
