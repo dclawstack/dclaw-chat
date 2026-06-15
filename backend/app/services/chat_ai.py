@@ -99,6 +99,28 @@ class ChatAIService:
                     )
                 if len(seen) >= limit:
                     break
+            # Fallback: literal name matching is often thin (e.g. "what did we
+            # decide?" shares no words with entity names). Ground the answer in
+            # the workspace's salient memory — recent decisions/action-items
+            # first, then any recent entity — so the copilot always cites.
+            if len(seen) < limit:
+                for kinds in (["decision", "action_item"], None):
+                    if len(seen) >= limit:
+                        break
+                    for entity in await repo.search_entities(
+                        workspace_id, "", kinds=kinds, limit=limit
+                    ):
+                        seen.setdefault(
+                            entity.id,
+                            Citation(
+                                name=entity.name,
+                                kind=entity.kind,
+                                source_type=entity.source_type,
+                                source_id=entity.source_id,
+                            ),
+                        )
+                        if len(seen) >= limit:
+                            break
         except Exception as e:
             logger.warning(f"Graph citation lookup failed: {e}")
         return list(seen.values())[:limit]
