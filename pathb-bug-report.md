@@ -3,6 +3,21 @@
 **Auditors:** opus-4.8 + sonnet-4.6 (independent) · reconciled by opus-4.8.
 **Confirmed by both models: 7** · Opus: 15 · Sonnet: 15
 
+## Closeout status (2026-07-07, #25)
+
+All 7 confirmed findings are **CLOSED** — each has a fix in the codebase and a
+regression test that exercises the attack and asserts it is blocked:
+
+| # | Finding | Fix | Regression tests |
+|---|---------|-----|------------------|
+| 1 | Admin seed/clear unauthenticated | `require_role` gating on the admin router (`app/api/v1/admin.py`) | `tests/integration/test_admin_auth.py` |
+| 2 | WS identity from query params | `authenticate_websocket` derives identity from a verified token (`app/core/deps.py`) | `tests/unit/test_ws_auth.py` |
+| 3 | SSRF via bot webhook_url | webhook dispatch uses `safe_async_client` with pinned DNS (`app/services/command_parser.py`) | `tests/unit/test_ssrf.py` |
+| 4 | SSRF in URL unfurl | unfurl uses `safe_async_client`, redirects disabled, header/size caps (`app/services/files.py`) | `tests/unit/test_ssrf.py`, `tests/unit/test_files_extra.py` |
+| 5 | Path traversal in file serving | resolved-path containment check in `FileService` | `tests/integration/test_file_serving_security.py` |
+| 6 | get_meeting IDOR | 403 on non-owner access (`app/api/v1/meetings.py`) | `tests/integration/test_meetings_api.py` (cross-user 403) |
+| 7 | reply_count lost updates | atomic `UPDATE … SET reply_count = reply_count + 1` at all three sites | `tests/integration/test_messaging_api.py::test_reply_count_correct_under_concurrent_replies` |
+
 ## 🔴 Confirmed bugs (found by both models)
 
 #### 1. 🟧 [HIGH/security] Unauthenticated admin seed/clear endpoints wipe all data
