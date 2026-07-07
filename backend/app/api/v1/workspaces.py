@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -9,6 +10,8 @@ from app.schemas.workspace import (
     WorkspaceOut,
     MemberOut,
     MemberRoleUpdate,
+    ModelPolicyOut,
+    ModelPolicyUpdate,
     InviteCreate,
     InviteOut,
     InviteAccepted,
@@ -19,6 +22,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, CurrentUser
 from app.core.exceptions import NotFoundException, ForbiddenException
 from app.services import audit
+from app.services import model_policy
 
 router = APIRouter()
 
@@ -145,6 +149,41 @@ async def accept_workspace_invite(
         workspace_id=member.workspace_id, target_type="invite", target_id=token,
     )
     return InviteAccepted(workspace_id=member.workspace_id, role=member.role)
+
+
+@router.get("/{workspace_id}/settings/models", response_model=ModelPolicyOut)
+async def get_model_policy(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user)
+    allowed, local_only = await model_policy.get_policy(db, workspace_id)
+    return ModelPolicyOut(allowed_models=allowed, local_only=local_only)
+
+
+@router.put("/{workspace_id}/settings/models", response_model=ModelPolicyOut)
+async def set_model_policy(
+    workspace_id: str,
+    req: ModelPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """AI model policy is Owner/Admin-only (#30)."""
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    workspace.allowed_models = (
+        json.dumps(req.allowed_models) if req.allowed_models is not None else None
+    )
+    workspace.local_only = req.local_only
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.model_policy_changed",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+        detail={"allowed_models": req.allowed_models, "local_only": req.local_only},
+    )
+    return ModelPolicyOut(allowed_models=req.allowed_models, local_only=req.local_only)
 
 
 async def _count_owners(repo: WorkspaceRepository, workspace_id: str) -> int:

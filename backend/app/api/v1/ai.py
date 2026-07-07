@@ -11,6 +11,7 @@ from app.schemas.ai import (
 )
 from app.services.chat_ai import ChatAIService
 from app.core.database import get_db
+from app.services import model_policy
 from app.core.deps import get_current_user, CurrentUser
 from app.core.exceptions import ForbiddenException
 from app.repositories.workspace_repo import is_workspace_member
@@ -29,6 +30,8 @@ async def ai_chat(
         db, req.workspace_id, user.user_id
     ):
         raise ForbiddenException("Not a member of this workspace")
+    if req.workspace_id and req.model:
+        await model_policy.enforce(db, req.workspace_id, req.model)
     service = ChatAIService(db)
     return await service.chat(req)
 

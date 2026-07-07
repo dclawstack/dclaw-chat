@@ -26,6 +26,16 @@ class MemberRoleUpdate(BaseModel):
     role: Literal["Owner", "Admin", "Member", "Guest"]
 
 
+class ModelPolicyOut(BaseModel):
+    allowed_models: Optional[list[str]] = None
+    local_only: bool = False
+
+
+class ModelPolicyUpdate(BaseModel):
+    allowed_models: Optional[list[str]] = None
+    local_only: bool = False
+
+
 class MemberOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

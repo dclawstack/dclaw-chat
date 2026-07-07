@@ -17,6 +17,8 @@ export interface ChatCompletionRequest {
   messages: ApiMessage[];
   model: string;
   temperature?: number;
+  /** Workspace context — the workspace's AI model policy applies (#30). */
+  workspace_id?: string | null;
 }
 
 export interface ChatCompletionResponse {
@@ -119,8 +121,9 @@ export interface ModelInfo {
   available: boolean;
 }
 
-export async function listModels(): Promise<ModelInfo[]> {
-  const res = await apiFetch(`${API_BASE}/models`);
+export async function listModels(workspaceId?: string | null): Promise<ModelInfo[]> {
+  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  const res = await apiFetch(`${API_BASE}/models${qs}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch models: ${res.statusText}`);
   }
@@ -568,6 +571,36 @@ export async function acceptWorkspaceInvite(
 ): Promise<{ workspace_id: string; role: string }> {
   const res = await apiFetch(`${API_BASE}/workspaces/invites/${token}/accept`, {
     method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface ModelPolicy {
+  allowed_models: string[] | null;
+  local_only: boolean;
+}
+
+export async function getModelPolicy(workspaceId: string): Promise<ModelPolicy> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/settings/models`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function setModelPolicy(
+  workspaceId: string,
+  policy: ModelPolicy
+): Promise<ModelPolicy> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/settings/models`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(policy),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));

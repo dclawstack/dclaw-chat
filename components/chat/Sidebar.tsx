@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CatchMeUp } from "@/components/graph/CatchMeUp";
 import { UpgradeButton } from "@/components/billing/UpgradeButton";
 import { AuditLogPanel } from "@/components/workspace/AuditLogPanel";
+import { ModelPolicyToggle } from "@/components/workspace/ModelPolicyToggle";
 import { AuthUserButton } from "@/components/auth/UserButton";
 import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
@@ -321,6 +322,10 @@ function CatchMeUpSection() {
           )}
 
           {currentId && <UpgradeButton workspaceId={currentId} />}
+
+          {currentId && isWorkspaceAdmin && (
+            <ModelPolicyToggle workspaceId={currentId} />
+          )}
 
           {currentId && isWorkspaceAdmin && (
             <details className="px-0">
