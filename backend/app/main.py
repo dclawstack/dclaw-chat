@@ -17,6 +17,7 @@ from app.core.database import engine, Base
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.migrations import check_database_revision
+from app.core.observability import setup_observability, setup_tracing
 from app.core.ratelimit import limiter
 from app.services.messaging import manager as ws_manager
 from app.api.v1 import api_router
@@ -166,6 +167,10 @@ async def request_id_middleware(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     return response
 
+
+# Observability (#29): /metrics, /health/live, /health/ready + optional OTLP
+setup_observability(app)
+setup_tracing(app)
 
 # API Routes
 app.include_router(api_router, prefix="/api/v1")
