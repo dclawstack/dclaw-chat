@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.migrations import check_database_revision
 from app.core.ratelimit import limiter
+from app.services.messaging import manager as ws_manager
 from app.api.v1 import api_router
 import app.models  # noqa: F401 — ensures all ORM tables are registered before create_all
 
@@ -48,7 +49,9 @@ async def lifespan(app: FastAPI):
     if settings.is_production:
         async with engine.connect() as conn:
             await conn.run_sync(check_database_revision)
+        await ws_manager.start_relay()  # cross-replica WS fan-out (#23)
         yield
+        await ws_manager.stop_relay()
         await engine.dispose()
         return
 
@@ -111,8 +114,10 @@ async def lifespan(app: FastAPI):
                 ))
             except Exception:
                 pass
+    await ws_manager.start_relay()  # cross-replica WS fan-out (#23)
     yield
     # Shutdown
+    await ws_manager.stop_relay()
     await engine.dispose()
 
 
