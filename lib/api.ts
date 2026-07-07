@@ -579,6 +579,15 @@ export async function acceptWorkspaceInvite(
   return res.json();
 }
 
+export async function exportWorkspaceMessages(workspaceId: string): Promise<unknown> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/export`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export interface ModelPolicy {
   allowed_models: string[] | null;
   local_only: boolean;

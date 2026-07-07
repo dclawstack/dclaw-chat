@@ -14,6 +14,7 @@ import {
   createWorkspace,
   createWorkspaceInvite,
   acceptWorkspaceInvite,
+  exportWorkspaceMessages,
 } from "@/lib/api";
 import {
   Plus,
@@ -325,6 +326,29 @@ function CatchMeUpSection() {
 
           {currentId && isWorkspaceAdmin && (
             <ModelPolicyToggle workspaceId={currentId} />
+          )}
+
+          {currentId && isWorkspaceAdmin && (
+            <button
+              onClick={() =>
+                run(async () => {
+                  const data = await exportWorkspaceMessages(currentId);
+                  const blob = new Blob([JSON.stringify(data, null, 2)], {
+                    type: "application/json",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `workspace-${currentId}-export.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                })
+              }
+              disabled={busy}
+              className="w-full h-7 px-2 rounded-md border border-border text-xs font-medium hover:bg-accent disabled:opacity-50 text-left"
+            >
+              Export message history (JSON)
+            </button>
           )}
 
           {currentId && isWorkspaceAdmin && (

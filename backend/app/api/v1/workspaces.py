@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -17,6 +18,7 @@ from app.schemas.workspace import (
     InviteAccepted,
 )
 from app.models.audit import AuditEventORM
+from app.models.channel import ChannelORM, ChannelMessageORM
 from app.repositories.workspace_repo import WorkspaceRepository
 from app.core.database import get_db
 from app.core.deps import get_current_user, CurrentUser
@@ -149,6 +151,85 @@ async def accept_workspace_invite(
         workspace_id=member.workspace_id, target_type="invite", target_id=token,
     )
     return InviteAccepted(workspace_id=member.workspace_id, role=member.role)
+
+
+@router.get("/{workspace_id}/export")
+async def export_workspace_messages(
+    workspace_id: str,
+    channel_id: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """E-discovery export (#32): full message history as structured JSON.
+
+    Owner/Admin only. Optional single-channel scope and date range. Thread
+    structure survives via ``thread_parent_id``; attachments stay as stored
+    references. Every export writes an audit event.
+    """
+    repo = WorkspaceRepository(db)
+    await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+
+    ch_stmt = select(ChannelORM).where(ChannelORM.workspace_id == workspace_id)
+    if channel_id:
+        ch_stmt = ch_stmt.where(ChannelORM.id == channel_id)
+    channels = (await db.execute(ch_stmt.order_by(ChannelORM.created_at))).scalars().all()
+    if channel_id and not channels:
+        raise NotFoundException("Channel not found in this workspace")
+
+    out_channels = []
+    for ch in channels:
+        msg_stmt = select(ChannelMessageORM).where(
+            ChannelMessageORM.channel_id == ch.id
+        )
+        if start:
+            msg_stmt = msg_stmt.where(ChannelMessageORM.created_at >= start)
+        if end:
+            msg_stmt = msg_stmt.where(ChannelMessageORM.created_at <= end)
+        msgs = (
+            await db.execute(msg_stmt.order_by(ChannelMessageORM.created_at))
+        ).scalars().all()
+        out_channels.append({
+            "id": ch.id,
+            "name": ch.name,
+            "type": ch.type,
+            "messages": [
+                {
+                    "id": m.id,
+                    "user_id": m.user_id,
+                    "user_name": m.user_name,
+                    "content": m.content,
+                    "thread_parent_id": m.thread_parent_id,
+                    "reply_count": m.reply_count,
+                    "topic": m.topic,
+                    "attachments": json.loads(m.attachments) if m.attachments else None,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m in msgs
+            ],
+        })
+
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.exported",
+        workspace_id=workspace_id, target_type="export",
+        target_id=channel_id or "all-channels",
+        detail={
+            "channel_id": channel_id,
+            "start": start.isoformat() if start else None,
+            "end": end.isoformat() if end else None,
+            "channels": len(out_channels),
+            "messages": sum(len(c["messages"]) for c in out_channels),
+        },
+    )
+    return {
+        "workspace_id": workspace_id,
+        "range": {
+            "start": start.isoformat() if start else None,
+            "end": end.isoformat() if end else None,
+        },
+        "channels": out_channels,
+    }
 
 
 @router.get("/{workspace_id}/settings/models", response_model=ModelPolicyOut)
