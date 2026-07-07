@@ -8,6 +8,7 @@ from app.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceOut,
     MemberOut,
+    MemberRoleUpdate,
     InviteCreate,
     InviteOut,
     InviteAccepted,
@@ -46,13 +47,19 @@ async def require_member(
     return workspace, member
 
 
-def _to_out(workspace) -> WorkspaceOut:
+def _to_out(workspace, user_id: Optional[str] = None) -> WorkspaceOut:
+    my_role = None
+    if user_id is not None:
+        my_role = next(
+            (m.role for m in workspace.members if m.user_id == user_id), None
+        )
     return WorkspaceOut(
         id=workspace.id,
         name=workspace.name,
         created_by=workspace.created_by,
         created_at=workspace.created_at,
         member_count=len(workspace.members),
+        my_role=my_role,
     )
 
 
@@ -64,7 +71,7 @@ async def create_workspace(
 ):
     repo = WorkspaceRepository(db)
     workspace = await repo.create(name=req.name, created_by=user.user_id)
-    return _to_out(workspace)
+    return _to_out(workspace, user.user_id)
 
 
 @router.get("", response_model=List[WorkspaceOut])
@@ -74,7 +81,7 @@ async def list_workspaces(
 ):
     repo = WorkspaceRepository(db)
     workspaces = await repo.list_for_user(user.user_id)
-    return [_to_out(w) for w in workspaces]
+    return [_to_out(w, user.user_id) for w in workspaces]
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceOut)
@@ -85,7 +92,7 @@ async def get_workspace(
 ):
     repo = WorkspaceRepository(db)
     workspace, _ = await require_member(repo, workspace_id, user)
-    return _to_out(workspace)
+    return _to_out(workspace, user.user_id)
 
 
 @router.get("/{workspace_id}/members", response_model=List[MemberOut])
@@ -138,6 +145,70 @@ async def accept_workspace_invite(
         workspace_id=member.workspace_id, target_type="invite", target_id=token,
     )
     return InviteAccepted(workspace_id=member.workspace_id, role=member.role)
+
+
+async def _count_owners(repo: WorkspaceRepository, workspace_id: str) -> int:
+    members = await repo.list_members(workspace_id)
+    return sum(1 for m in members if m.role == "Owner")
+
+
+@router.patch("/{workspace_id}/members/{member_user_id}", response_model=MemberOut)
+async def change_member_role(
+    workspace_id: str,
+    member_user_id: str,
+    req: MemberRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Role changes are Owner/Admin-only; only an Owner may grant or revoke
+    the Owner role, and the last Owner can never be demoted (#27)."""
+    repo = WorkspaceRepository(db)
+    _, actor = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    target = await repo.get_member(workspace_id, member_user_id)
+    if not target:
+        raise NotFoundException("Member not found")
+    if (target.role == "Owner" or req.role == "Owner") and actor.role != "Owner":
+        raise ForbiddenException("Only an Owner can grant or revoke the Owner role")
+    if target.role == "Owner" and req.role != "Owner":
+        if await _count_owners(repo, workspace_id) <= 1:
+            raise ForbiddenException("Cannot demote the last Owner")
+    old_role = target.role
+    target.role = req.role
+    await db.commit()
+    await db.refresh(target)
+    await audit.record(
+        db, actor_id=user.user_id, action="member.role_changed",
+        workspace_id=workspace_id, target_type="member", target_id=member_user_id,
+        detail={"from": old_role, "to": req.role},
+    )
+    return MemberOut.model_validate(target)
+
+
+@router.delete("/{workspace_id}/members/{member_user_id}", status_code=204)
+async def remove_member(
+    workspace_id: str,
+    member_user_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Member removal is Owner/Admin-only; Owners can only be removed by an
+    Owner, and never the last one (#27)."""
+    repo = WorkspaceRepository(db)
+    _, actor = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    target = await repo.get_member(workspace_id, member_user_id)
+    if not target:
+        raise NotFoundException("Member not found")
+    if target.role == "Owner":
+        if actor.role != "Owner":
+            raise ForbiddenException("Only an Owner can remove an Owner")
+        if await _count_owners(repo, workspace_id) <= 1:
+            raise ForbiddenException("Cannot remove the last Owner")
+    await db.delete(target)
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="member.removed",
+        workspace_id=workspace_id, target_type="member", target_id=member_user_id,
+    )
 
 
 @router.get("/{workspace_id}/audit", response_model=List[AuditEventOut])

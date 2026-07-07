@@ -1,5 +1,9 @@
 from datetime import datetime
+from typing import Literal, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
+
+WORKSPACE_ROLES = ("Owner", "Admin", "Member", "Guest")
 
 
 class WorkspaceCreate(BaseModel):
@@ -14,6 +18,12 @@ class WorkspaceOut(BaseModel):
     created_by: str
     created_at: datetime
     member_count: int = 0
+    # The caller's own role in this workspace — lets the UI hide admin controls.
+    my_role: Optional[str] = None
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Literal["Owner", "Admin", "Member", "Guest"]
 
 
 class MemberOut(BaseModel):

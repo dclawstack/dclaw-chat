@@ -173,6 +173,10 @@ function CatchMeUpSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const currentWorkspace = workspaces.find((w) => w.id === currentId);
+  const isWorkspaceAdmin =
+    currentWorkspace?.my_role === "Owner" || currentWorkspace?.my_role === "Admin";
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -281,8 +285,8 @@ function CatchMeUpSection() {
             </button>
           </div>
 
-          {/* Invite a teammate (members of the selected workspace) */}
-          {currentId && (
+          {/* Invite a teammate — workspace Owners/Admins only (#27) */}
+          {currentId && isWorkspaceAdmin && (
             <div className="space-y-1">
               <div className="flex gap-1">
                 <input
@@ -318,7 +322,7 @@ function CatchMeUpSection() {
 
           {currentId && <UpgradeButton workspaceId={currentId} />}
 
-          {currentId && (
+          {currentId && isWorkspaceAdmin && (
             <details className="px-0">
               <summary className="px-2 text-xs cursor-pointer text-muted-foreground hover:text-foreground">
                 Audit log

@@ -22,6 +22,7 @@ from app.services.ollama_service import OllamaService, OLLAMA_MODELS
 from app.services.files import file_service, extract_urls, INLINE_SAFE_MIMES
 from app.services.command_parser import parse_command, execute_command
 from app.services.graph_service import GraphService
+from app.services import audit
 from app.schemas.chat import Message as ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -108,14 +109,19 @@ def _classify_topic(content: str) -> str:
 
 # ── Workspace access (T2-06/T2-07) ───────────────────────────────────────────
 
-async def _is_workspace_member(db: AsyncSession, workspace_id: str, user_id: str) -> bool:
+async def _member_role(db: AsyncSession, workspace_id: str, user_id: str):
+    """The caller's role in the workspace, or None if not a member."""
     result = await db.execute(
-        select(WorkspaceMemberORM.id).where(
+        select(WorkspaceMemberORM.role).where(
             WorkspaceMemberORM.workspace_id == workspace_id,
             WorkspaceMemberORM.user_id == user_id,
         )
     )
-    return result.scalar_one_or_none() is not None
+    return result.scalar_one_or_none()
+
+
+async def _is_workspace_member(db: AsyncSession, workspace_id: str, user_id: str) -> bool:
+    return await _member_role(db, workspace_id, user_id) is not None
 
 
 async def _require_channel_access(
@@ -128,10 +134,14 @@ async def _require_channel_access(
     channel = await db.get(ChannelORM, channel_id)
     if channel is None:
         return None
-    if channel.workspace_id and not await _is_workspace_member(
-        db, channel.workspace_id, user.user_id
-    ):
-        raise HTTPException(403, "Not a member of this channel's workspace")
+    if channel.workspace_id:
+        role = await _member_role(db, channel.workspace_id, user.user_id)
+        if role is None:
+            raise HTTPException(403, "Not a member of this channel's workspace")
+        if role == "Guest":
+            # Guests only access channels they were explicitly added to;
+            # no grant mechanism exists yet, so workspace channels are closed.
+            raise HTTPException(403, "Guests cannot access this channel")
     return channel
 
 
@@ -147,7 +157,8 @@ async def list_channels(
 ):
     # Visible: legacy/global channels + channels of workspaces I belong to
     my_workspaces = select(WorkspaceMemberORM.workspace_id).where(
-        WorkspaceMemberORM.user_id == user.user_id
+        WorkspaceMemberORM.user_id == user.user_id,
+        WorkspaceMemberORM.role != "Guest",
     )
     result = await db.execute(
         select(ChannelORM)
@@ -176,10 +187,12 @@ async def create_channel(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
-    if req.workspace_id and not await _is_workspace_member(
-        db, req.workspace_id, user.user_id
-    ):
-        raise HTTPException(403, "Not a member of this workspace")
+    if req.workspace_id:
+        role = await _member_role(db, req.workspace_id, user.user_id)
+        if role is None:
+            raise HTTPException(403, "Not a member of this workspace")
+        if role == "Guest":
+            raise HTTPException(403, "Guests cannot create channels")
     channel = ChannelORM(
         id=str(uuid.uuid4()),
         name=req.name,
@@ -190,6 +203,35 @@ async def create_channel(
     await db.commit()
     await db.refresh(channel)
     return channel
+
+
+@router.delete("/channels/{channel_id}", status_code=204)
+async def delete_channel(
+    channel_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Channel deletion is workspace Owner/Admin-only (#27). Legacy channels
+    (no workspace) are not deletable through the API."""
+    channel = await db.get(ChannelORM, channel_id)
+    if channel is None:
+        raise HTTPException(404, "Channel not found")
+    if not channel.workspace_id:
+        raise HTTPException(403, "Legacy channels cannot be deleted")
+    role = await _member_role(db, channel.workspace_id, user.user_id)
+    if role not in ("Owner", "Admin"):
+        raise HTTPException(403, "Workspace Owner/Admin role required")
+    from sqlalchemy import delete as sa_delete
+    await db.execute(
+        sa_delete(ChannelMessageORM).where(ChannelMessageORM.channel_id == channel_id)
+    )
+    await db.delete(channel)
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="channel.deleted",
+        workspace_id=channel.workspace_id, target_type="channel", target_id=channel_id,
+        detail={"name": channel.name},
+    )
 
 
 @router.get("/channels/{channel_id}/messages", response_model=List[ChannelMessageOut])
@@ -583,13 +625,11 @@ async def websocket_endpoint(
     # membership before the socket may join the room.
     async with async_session() as db:
         channel = await db.get(ChannelORM, channel_id)
-        if (
-            channel is not None
-            and channel.workspace_id
-            and not await _is_workspace_member(db, channel.workspace_id, user_id)
-        ):
-            await websocket.close(code=1008)
-            return
+        if channel is not None and channel.workspace_id:
+            role = await _member_role(db, channel.workspace_id, user_id)
+            if role is None or role == "Guest":
+                await websocket.close(code=1008)
+                return
 
     await manager.connect(websocket, user_id)
     manager.subscribe(channel_id, user_id)

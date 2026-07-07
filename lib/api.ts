@@ -515,6 +515,8 @@ export interface Workspace {
   created_by: string;
   created_at: string;
   member_count: number;
+  /** Caller's role in this workspace: Owner | Admin | Member | Guest */
+  my_role?: string | null;
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {
