@@ -66,10 +66,21 @@ See the [Helm deployment](#kubernetes-deployment) section for CloudNativePG setu
 
 ### 4. Run Database Migrations
 
+The schema is managed by Alembic. In development (`ENVIRONMENT=development`)
+the app also auto-creates tables on startup, so this step is optional locally
+— but in production the app **refuses to start** unless the database is at the
+current migration head.
+
 ```bash
-# The app auto-creates tables on startup for v1.0
-# For production, use Alembic:
-# alembic upgrade head
+cd backend
+alembic upgrade head
+```
+
+Upgrading an install that predates Alembic (tables already exist and match
+the current schema)? Stamp it once instead of migrating:
+
+```bash
+alembic stamp head
 ```
 
 ### 5. Start the Backend

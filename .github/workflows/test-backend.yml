@@ -19,6 +19,20 @@ jobs:
       run:
         working-directory: backend
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dclaw_migrate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +46,18 @@ jobs:
 
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
+
+      # #22: prove an empty database reaches the current schema via Alembic
+      # alone, and that migrations have not drifted from the ORM models.
+      - name: Migrate empty database to head
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_migrate
+        run: alembic upgrade head
+
+      - name: Check for model/migration drift
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_migrate
+        run: alembic check
 
       - name: Run pytest
         run: python -m pytest -q

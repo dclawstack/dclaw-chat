@@ -23,6 +23,7 @@ dependencies = [
     "flagsmith>=3.6.0",
     "mypy>=1.8",
     "stripe>=15.0.0",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]

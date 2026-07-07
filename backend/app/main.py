@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.database import engine, Base
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.migrations import check_database_revision
 from app.core.ratelimit import limiter
 from app.api.v1 import api_router
 import app.models  # noqa: F401 — ensures all ORM tables are registered before create_all
@@ -42,61 +43,74 @@ if os.environ.get("SENTRY_DSN"):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup. Production never creates or mutates schema — Alembic owns it
+    # (#22): verify the DB is at the migration head and fail loudly if not.
+    if settings.is_production:
+        async with engine.connect() as conn:
+            await conn.run_sync(check_database_revision)
+        yield
+        await engine.dispose()
+        return
+
+    # Dev/test bootstrap: create tables directly from the ORM metadata.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Safe schema migrations for existing tables
-        await conn.execute(text(
-            "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS topic VARCHAR(50)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS attachments TEXT"
-        ))
-        # conversations ownership (v2.0 P0): NULL = legacy-shared row
-        await conn.execute(text(
-            "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_by VARCHAR(64)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_conversations_created_by"
-            " ON conversations (created_by)"
-        ))
-        # bots ownership (v2.0 P2, T2-05): NULL = legacy-shared bot
-        await conn.execute(text(
-            "ALTER TABLE bots ADD COLUMN IF NOT EXISTS created_by VARCHAR(64)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_bots_created_by ON bots (created_by)"
-        ))
-        # channel workspace scoping (v2.0 P2, T2-06): NULL = legacy/global channel
-        await conn.execute(text(
-            "ALTER TABLE channels ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_channels_workspace_id"
-            " ON channels (workspace_id)"
-        ))
-        # call/huddle room workspace scoping (v2.0 P2, T2-07)
-        await conn.execute(text(
-            "ALTER TABLE call_rooms ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_call_rooms_workspace_id"
-            " ON call_rooms (workspace_id)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE huddle_rooms ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)"
-        ))
-        await conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_huddle_rooms_workspace_id"
-            " ON huddle_rooms (workspace_id)"
-        ))
-        # bots table columns added in v1.3
-        try:
+    if engine.dialect.name != "sqlite":
+        # Safe schema migrations for pre-existing dev databases. Postgres-only
+        # DDL (sqlite lacks ADD COLUMN IF NOT EXISTS; sqlite dev DBs are fully
+        # created by create_all above anyway).
+        async with engine.begin() as conn:
             await conn.execute(text(
-                "ALTER TABLE bots ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR(10)"
+                "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS topic VARCHAR(50)"
             ))
-        except Exception:
-            pass
+            await conn.execute(text(
+                "ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS attachments TEXT"
+            ))
+            # conversations ownership (v2.0 P0): NULL = legacy-shared row
+            await conn.execute(text(
+                "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_by VARCHAR(64)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_created_by"
+                " ON conversations (created_by)"
+            ))
+            # bots ownership (v2.0 P2, T2-05): NULL = legacy-shared bot
+            await conn.execute(text(
+                "ALTER TABLE bots ADD COLUMN IF NOT EXISTS created_by VARCHAR(64)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_bots_created_by ON bots (created_by)"
+            ))
+            # channel workspace scoping (v2.0 P2, T2-06): NULL = legacy/global channel
+            await conn.execute(text(
+                "ALTER TABLE channels ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_channels_workspace_id"
+                " ON channels (workspace_id)"
+            ))
+            # call/huddle room workspace scoping (v2.0 P2, T2-07)
+            await conn.execute(text(
+                "ALTER TABLE call_rooms ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_call_rooms_workspace_id"
+                " ON call_rooms (workspace_id)"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE huddle_rooms ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(36)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_huddle_rooms_workspace_id"
+                " ON huddle_rooms (workspace_id)"
+            ))
+            # bots table columns added in v1.3
+            try:
+                await conn.execute(text(
+                    "ALTER TABLE bots ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR(10)"
+                ))
+            except Exception:
+                pass
     yield
     # Shutdown
     await engine.dispose()

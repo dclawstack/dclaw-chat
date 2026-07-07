@@ -108,3 +108,26 @@ Requires:
 - cert-manager
 - nginx ingress
 - CloudNativePG operator
+
+## Database Migrations (all paths)
+
+Production schema is managed exclusively by Alembic. The backend **refuses to
+start** in production (`ENVIRONMENT=production`) unless the database is at the
+current migration head — a missed migration fails loudly at deploy time
+instead of erroring at runtime.
+
+Run migrations before starting (or restarting) the backend, on every upgrade:
+
+```bash
+cd backend
+alembic upgrade head   # DATABASE_URL must point at the production DB
+```
+
+- **VPS / Docker Compose**: run the command inside the backend container (or
+  from the repo with `DATABASE_URL` exported) after `git pull` and before
+  `docker compose up -d`.
+- **Kubernetes**: run it as an init step or one-off `kubectl exec`/Job against
+  the backend image before rolling the Deployment to the new version.
+- **Existing installs created before Alembic** (tables already present and
+  current): stamp once with `alembic stamp head`, then use `alembic upgrade
+  head` for all future upgrades.
