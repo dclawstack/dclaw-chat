@@ -24,13 +24,19 @@ async def test_liveness_always_green(client):
 
 @pytest.mark.asyncio
 async def test_readiness_reports_ready_with_db(client, monkeypatch):
-    import app.core.database as database
-    from tests.conftest import engine as test_engine
+    from sqlalchemy.ext.asyncio import create_async_engine
 
-    monkeypatch.setattr(database, "engine", test_engine)
+    import app.core.database as database
+
+    # A standalone sqlite engine is enough — readiness only runs SELECT 1.
+    # (Do NOT import tests.conftest here: re-executing it rebinds get_db to a
+    # fresh empty engine and later tests fail with "no such table".)
+    good_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    monkeypatch.setattr(database, "engine", good_engine)
     r = await client.get("/health/ready")
     assert r.status_code == 200
     assert r.json() == {"status": "ready"}
+    await good_engine.dispose()
 
 
 @pytest.mark.asyncio
