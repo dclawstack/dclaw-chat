@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CatchMeUp } from "@/components/graph/CatchMeUp";
 import { UpgradeButton } from "@/components/billing/UpgradeButton";
+import { AuditLogPanel } from "@/components/workspace/AuditLogPanel";
 import { AuthUserButton } from "@/components/auth/UserButton";
 import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
@@ -316,6 +317,15 @@ function CatchMeUpSection() {
           )}
 
           {currentId && <UpgradeButton workspaceId={currentId} />}
+
+          {currentId && (
+            <details className="px-0">
+              <summary className="px-2 text-xs cursor-pointer text-muted-foreground hover:text-foreground">
+                Audit log
+              </summary>
+              <AuditLogPanel workspaceId={currentId} />
+            </details>
+          )}
 
           {currentId ? (
             <CatchMeUp workspaceId={currentId} />

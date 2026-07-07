@@ -574,6 +574,36 @@ export async function acceptWorkspaceInvite(
   return res.json();
 }
 
+export interface AuditEvent {
+  id: string;
+  workspace_id: string | null;
+  actor_id: string;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  detail: string | null;
+  created_at: string;
+}
+
+export async function listAuditEvents(
+  workspaceId: string,
+  opts: { action?: string; limit?: number; offset?: number } = {}
+): Promise<AuditEvent[]> {
+  const params = new URLSearchParams();
+  if (opts.action) params.set("action", opts.action);
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  const res = await apiFetch(
+    `${API_BASE}/workspaces/${workspaceId}/audit${qs ? `?${qs}` : ""}`
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // ── Workspace Knowledge Graph ─────────────────────────────────────────────────
 
 export interface GraphEntity {

@@ -1,7 +1,9 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.schemas.audit import AuditEventOut
 from app.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceOut,
@@ -10,10 +12,12 @@ from app.schemas.workspace import (
     InviteOut,
     InviteAccepted,
 )
+from app.models.audit import AuditEventORM
 from app.repositories.workspace_repo import WorkspaceRepository
 from app.core.database import get_db
 from app.core.deps import get_current_user, CurrentUser
 from app.core.exceptions import NotFoundException, ForbiddenException
+from app.services import audit
 
 router = APIRouter()
 
@@ -108,6 +112,11 @@ async def create_workspace_invite(
     invite = await repo.create_invite(
         workspace_id=workspace_id, email=req.email, invited_by=user.user_id
     )
+    await audit.record(
+        db, actor_id=user.user_id, action="invite.created",
+        workspace_id=workspace_id, target_type="invite", target_id=invite.id,
+        detail={"email": req.email},
+    )
     return InviteOut(
         token=invite.id, workspace_id=invite.workspace_id, email=invite.email
     )
@@ -124,4 +133,33 @@ async def accept_workspace_invite(
     if not invite:
         raise NotFoundException("Invite not found")
     member = await repo.accept_invite(invite, user.user_id)
+    await audit.record(
+        db, actor_id=user.user_id, action="invite.accepted",
+        workspace_id=member.workspace_id, target_type="invite", target_id=token,
+    )
     return InviteAccepted(workspace_id=member.workspace_id, role=member.role)
+
+
+@router.get("/{workspace_id}/audit", response_model=List[AuditEventOut])
+async def list_audit_events(
+    workspace_id: str,
+    action: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Append-only audit trail (#26). Workspace Owner/Admin only; there is
+    deliberately no route that mutates audit rows."""
+    repo = WorkspaceRepository(db)
+    await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    stmt = select(AuditEventORM).where(AuditEventORM.workspace_id == workspace_id)
+    if action:
+        stmt = stmt.where(AuditEventORM.action == action)
+    stmt = (
+        stmt.order_by(AuditEventORM.created_at.desc(), AuditEventORM.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [AuditEventOut.model_validate(r) for r in rows]
