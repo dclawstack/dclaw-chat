@@ -181,6 +181,10 @@ setup_tracing(app)
 # API Routes
 app.include_router(api_router, prefix="/api/v1")
 
+# SCIM 2.0 provisioning for enterprise IdPs (#31) — bearer-token auth, no JWT
+from app.api.v1.scim import router as scim_router  # noqa: E402
+app.include_router(scim_router, prefix="/scim/v2")
+
 
 @app.get("/health")
 async def health_root():

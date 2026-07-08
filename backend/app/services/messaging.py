@@ -117,6 +117,8 @@ class ConnectionManager:
             )
         elif kind == "send_to":
             await self._deliver_to_user(event.get("user_id", ""), event.get("payload", {}))
+        elif kind == "force_disconnect":
+            await self._force_disconnect_local(event.get("user_id", ""))
 
     async def _publish(self, event: dict) -> None:
         client = self._get_redis()
@@ -197,6 +199,20 @@ class ConnectionManager:
             "user_id": user_id,
             "payload": payload,
         })
+
+    async def force_disconnect(self, user_id: str) -> None:
+        """Close the user's sockets on every replica (SCIM deprovision, #31)."""
+        await self._force_disconnect_local(user_id)
+        await self._publish({"kind": "force_disconnect", "user_id": user_id})
+
+    async def _force_disconnect_local(self, user_id: str) -> None:
+        ws = self._connections.get(user_id)
+        if ws is not None:
+            try:
+                await ws.close(code=1008)
+            except Exception:
+                pass
+            self.disconnect(user_id)
 
     async def _deliver_to_user(self, user_id: str, payload: dict) -> None:
         ws = self._connections.get(user_id)

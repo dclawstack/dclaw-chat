@@ -234,6 +234,31 @@ async def export_workspace_messages(
     }
 
 
+@router.post("/{workspace_id}/scim/token")
+async def issue_scim_token(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Issue (or rotate) the workspace's SCIM bearer token (#31).
+
+    Owner/Admin only. The plaintext token is returned exactly once; only its
+    hash is stored. Rotating invalidates the previous token immediately.
+    """
+    from app.api.v1.scim import generate_token, hash_token
+
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    token = generate_token()
+    workspace.scim_token_hash = hash_token(token)
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="scim.token_issued",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+    )
+    return {"token": token, "scim_base_url": f"/scim/v2/{workspace_id}"}
+
+
 @router.get("/{workspace_id}/settings/retention", response_model=RetentionPolicyOut)
 async def get_retention_policy(
     workspace_id: str,

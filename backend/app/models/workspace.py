@@ -26,6 +26,8 @@ class WorkspaceORM(Base):
     )
     # Data retention (#33): purge messages older than N days. NULL = keep forever.
     retention_days: Mapped[Optional[int]] = mapped_column(Integer)
+    # SCIM (#31): sha256 of the workspace's provisioning bearer token. NULL = SCIM off.
+    scim_token_hash: Mapped[Optional[str]] = mapped_column(String(64))
 
     members: Mapped[List["WorkspaceMemberORM"]] = relationship(
         "WorkspaceMemberORM",
