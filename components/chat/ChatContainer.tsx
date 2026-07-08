@@ -14,6 +14,7 @@ import { MeetingsTab } from "@/components/meetings/MeetingsTab";
 import { HuddleList } from "@/components/huddles/HuddleList";
 import { SettingsDialog, getStoredTemperature, getStoredDefaultModel, useThemeSync } from "./SettingsDialog";
 import { chatStream, listModels } from "@/lib/api";
+import { getStoredWorkspaceId } from "@/lib/useWorkspaces";
 import { Button } from "@/components/ui/button";
 import { Menu, Shield, MessageSquare, Bot, Package, Video, Radio } from "lucide-react";
 
@@ -88,10 +89,11 @@ export function ChatContainer() {
     (c) => c.id === activeConversationId
   );
 
-  // Fetch available models from backend on mount; honor stored default model
+  // Fetch available models from backend on mount; honor stored default model.
+  // Workspace model policy filters the list server-side (#30).
   useEffect(() => {
     const storedDefault = getStoredDefaultModel();
-    listModels()
+    listModels(getStoredWorkspaceId())
       .then((models) => {
         setAvailableModels(models);
         const desired = storedDefault ?? selectedModel;
@@ -244,6 +246,7 @@ export function ChatContainer() {
             messages: apiMessages,
             model: selectedModel,
             temperature: getStoredTemperature(),
+            workspace_id: getStoredWorkspaceId(),
           },
           {
             onToken: (token) => {

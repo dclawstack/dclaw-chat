@@ -1,4 +1,36 @@
+import asyncio
+
 import pytest
+
+
+@pytest.mark.asyncio
+async def test_reply_count_correct_under_concurrent_replies(client):
+    """N replies posted concurrently observe a final count of exactly N (#24).
+
+    Guards the atomic ``reply_count = reply_count + 1`` increment: a
+    read-modify-write implementation loses updates when replies interleave.
+    """
+    ch = await client.post("/api/v1/messaging/channels", json={"name": "conc", "type": "public"})
+    channel_id = ch.json()["id"]
+    parent = await client.post(
+        f"/api/v1/messaging/channels/{channel_id}/messages",
+        json={"content": "parent message"},
+    )
+    parent_id = parent.json()["id"]
+
+    n = 10
+    results = await asyncio.gather(*[
+        client.post(
+            f"/api/v1/messaging/channels/{channel_id}/messages",
+            json={"content": f"reply {i}", "thread_parent_id": parent_id},
+        )
+        for i in range(n)
+    ])
+    assert all(r.status_code == 201 for r in results)
+
+    listing = await client.get(f"/api/v1/messaging/channels/{channel_id}/messages")
+    parent_row = next(m for m in listing.json() if m["id"] == parent_id)
+    assert parent_row["reply_count"] == n
 
 
 @pytest.mark.asyncio

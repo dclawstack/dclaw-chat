@@ -131,3 +131,94 @@ alembic upgrade head   # DATABASE_URL must point at the production DB
 - **Existing installs created before Alembic** (tables already present and
   current): stamp once with `alembic stamp head`, then use `alembic upgrade
   head` for all future upgrades.
+
+## Enterprise SSO (Logto organizations)
+
+Per ADR 0001, enterprise SSO runs through the self-hosted Logto instance —
+the backend never speaks SAML/OIDC itself. **Spike result (2026-07-08):** the
+open-source, self-hosted Logto edition ships enterprise SSO connectors
+(SAML/OIDC — Okta, Entra, Google Workspace), organizations, and just-in-time
+provisioning with no paywalled essentials, so the ADR's chosen path stands.
+
+Setup per customer workspace:
+
+1. In the Logto console, create an **organization** for the customer and
+   register their IdP as an **enterprise connector** on it (SAML metadata or
+   OIDC client — see [Logto's enterprise SSO docs](https://docs.logto.io/end-user-flows/enterprise-sso)).
+2. In DClaw, a workspace Owner/Admin maps the workspace to that organization:
+   `PUT /api/v1/workspaces/{id}/settings/sso` with
+   `{"logto_organization_id": "<org-id>"}` (audited; admin-only, even to read).
+3. Done. The backend keeps verifying Logto JWTs via JWKS exactly as before,
+   plus two organization-aware rules:
+   - a token carrying a **different** organization never grants access to the
+     workspace (cross-tenant boundary), and
+   - a first-time user whose token carries the **matching** organization is
+     JIT-provisioned as a Member (audited as `sso.jit_provisioned`).
+
+SCIM provisioning (`POST /api/v1/workspaces/{id}/scim/token`, endpoints under
+`/scim/v2/{workspace_id}`) composes with this: point the IdP's provisioning
+integration at the SCIM base URL with the issued bearer token, and
+deactivations revoke API access and close live WebSockets immediately.
+
+## Backup & Restore
+
+One-command backup of the database plus uploaded files:
+
+```bash
+DATABASE_URL=postgresql://dclaw:***@localhost:5432/dclaw_chat ./scripts/backup.sh
+# → backups/<timestamp>/{db.dump, uploads.tar.gz, MANIFEST}
+```
+
+Restore into an existing (possibly empty) database, with the backend stopped:
+
+```bash
+DATABASE_URL=postgresql://dclaw:***@localhost:5432/dclaw_chat ./scripts/restore.sh backups/<timestamp>
+```
+
+The restore procedure is continuously verifiable — this script proves the full
+seed → backup → destroy → restore → verify cycle against a throwaway database:
+
+```bash
+./scripts/test-backup-restore.sh
+```
+
+Schedule `backup.sh` from cron (VPS) or a CronJob (Kubernetes) and ship the
+output directory off the host.
+
+## Upgrade Runbook (zero-downtime-oriented)
+
+The supported upgrade path is release-to-release on `main`. The sequence is
+identical everywhere: **backup → migrate → roll the app**.
+
+**Docker Compose / VPS**
+
+```bash
+cd /opt/dclaw-chat
+DATABASE_URL=postgresql://dclaw:***@localhost:5432/dclaw_chat ./scripts/backup.sh   # 1. backup
+git pull                                                                            # 2. new version
+docker compose build backend frontend
+docker compose run --rm backend alembic upgrade head                                # 3. migrate
+docker compose up -d                                                                # 4. roll
+docker compose ps        # healthchecks use /health/ready — wait for "healthy"
+```
+
+**Kubernetes / Helm**
+
+```bash
+./scripts/backup.sh                                          # 1. backup (against the DB service)
+kubectl run migrate --rm -it --restart=Never \
+  --image=<backend-image:new-tag> -n dclaw-chat \
+  --env="DATABASE_URL=$DATABASE_URL" -- alembic upgrade head  # 2. migrate
+helm upgrade dclaw-chat helm/dclaw-chat --set backend.image.tag=<new-tag>  # 3. roll
+# Readiness probes on /health/ready gate traffic to migrated pods only.
+```
+
+**Rollback**
+
+1. Re-deploy the previous image tag (`git checkout <prev>` + compose up, or
+   `helm rollback dclaw-chat`).
+2. If the new version's migration is incompatible with the old code, restore
+   the pre-upgrade backup: stop the backend, `./scripts/restore.sh <backup>`,
+   start the old version.
+3. The backend refuses to boot if the schema revision doesn't match its
+   migrations, so a mismatched rollback fails loudly instead of corrupting data.

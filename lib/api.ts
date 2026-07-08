@@ -17,6 +17,8 @@ export interface ChatCompletionRequest {
   messages: ApiMessage[];
   model: string;
   temperature?: number;
+  /** Workspace context — the workspace's AI model policy applies (#30). */
+  workspace_id?: string | null;
 }
 
 export interface ChatCompletionResponse {
@@ -119,8 +121,9 @@ export interface ModelInfo {
   available: boolean;
 }
 
-export async function listModels(): Promise<ModelInfo[]> {
-  const res = await apiFetch(`${API_BASE}/models`);
+export async function listModels(workspaceId?: string | null): Promise<ModelInfo[]> {
+  const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  const res = await apiFetch(`${API_BASE}/models${qs}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch models: ${res.statusText}`);
   }
@@ -515,6 +518,8 @@ export interface Workspace {
   created_by: string;
   created_at: string;
   member_count: number;
+  /** Caller's role in this workspace: Owner | Admin | Member | Guest */
+  my_role?: string | null;
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {
@@ -567,6 +572,75 @@ export async function acceptWorkspaceInvite(
   const res = await apiFetch(`${API_BASE}/workspaces/invites/${token}/accept`, {
     method: "POST",
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function exportWorkspaceMessages(workspaceId: string): Promise<unknown> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/export`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface ModelPolicy {
+  allowed_models: string[] | null;
+  local_only: boolean;
+}
+
+export async function getModelPolicy(workspaceId: string): Promise<ModelPolicy> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/settings/models`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function setModelPolicy(
+  workspaceId: string,
+  policy: ModelPolicy
+): Promise<ModelPolicy> {
+  const res = await apiFetch(`${API_BASE}/workspaces/${workspaceId}/settings/models`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(policy),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface AuditEvent {
+  id: string;
+  workspace_id: string | null;
+  actor_id: string;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  detail: string | null;
+  created_at: string;
+}
+
+export async function listAuditEvents(
+  workspaceId: string,
+  opts: { action?: string; limit?: number; offset?: number } = {}
+): Promise<AuditEvent[]> {
+  const params = new URLSearchParams();
+  if (opts.action) params.set("action", opts.action);
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.offset) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  const res = await apiFetch(
+    `${API_BASE}/workspaces/${workspaceId}/audit${qs ? `?${qs}` : ""}`
+  );
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `HTTP ${res.status}`);

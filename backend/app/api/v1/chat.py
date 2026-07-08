@@ -7,6 +7,7 @@ from app.schemas.chat import ChatCompletionRequest, ChatCompletionResponse
 from app.services.chat_service import ChatService
 from app.core.database import get_db
 from app.core.deps import get_current_user, CurrentUser
+from app.services import model_policy
 
 router = APIRouter()
 
@@ -17,6 +18,8 @@ async def chat_completions(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    if req.workspace_id:
+        await model_policy.enforce(db, req.workspace_id, req.model)
     service = ChatService(db)
     return await service.complete(req, user_id=user.user_id)
 
@@ -27,6 +30,8 @@ async def chat_stream(
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
+    if req.workspace_id:
+        await model_policy.enforce(db, req.workspace_id, req.model)
     service = ChatService(db)
     # Authorize before the SSE response starts — inside the generator a 403
     # could only surface as an error event on an already-200 stream.

@@ -1,19 +1,34 @@
+import json
+from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.schemas.audit import AuditEventOut
 from app.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceOut,
     MemberOut,
+    MemberRoleUpdate,
+    ModelPolicyOut,
+    ModelPolicyUpdate,
+    RetentionPolicyOut,
+    RetentionPolicyUpdate,
+    SsoSettingsOut,
+    SsoSettingsUpdate,
     InviteCreate,
     InviteOut,
     InviteAccepted,
 )
+from app.models.audit import AuditEventORM
+from app.models.channel import ChannelORM, ChannelMessageORM
 from app.repositories.workspace_repo import WorkspaceRepository
 from app.core.database import get_db
 from app.core.deps import get_current_user, CurrentUser
 from app.core.exceptions import NotFoundException, ForbiddenException
+from app.services import audit
+from app.services import model_policy
 
 router = APIRouter()
 
@@ -34,7 +49,25 @@ async def require_member(
     workspace = await repo.get_by_id(workspace_id)
     if not workspace:
         raise NotFoundException("Workspace not found")
+
+    # Enterprise SSO (#35): a token minted for one Logto organization never
+    # grants access to a workspace mapped to a different organization.
+    sso_org = workspace.logto_organization_id
+    token_orgs = getattr(user, "organizations", None) or []
+    if sso_org and token_orgs and sso_org not in token_orgs:
+        raise ForbiddenException("Token organization does not match this workspace")
+
     member = await repo.get_member(workspace_id, user.user_id)
+    if not member and sso_org and sso_org in token_orgs:
+        # JIT provisioning: IdP-verified organization members land in the
+        # workspace on first sign-in (Logto organizations, ADR 0001).
+        member = await repo.add_member(workspace_id, user.user_id, role="Member")
+        await audit.record(
+            repo.db, actor_id=user.user_id, action="sso.jit_provisioned",
+            workspace_id=workspace_id, target_type="member", target_id=user.user_id,
+        )
+        # The selectin-loaded members list predates the JIT insert.
+        await repo.db.refresh(workspace, attribute_names=["members"])
     if not member:
         raise ForbiddenException("Not a member of this workspace")
     if roles is not None and member.role not in roles:
@@ -42,13 +75,19 @@ async def require_member(
     return workspace, member
 
 
-def _to_out(workspace) -> WorkspaceOut:
+def _to_out(workspace, user_id: Optional[str] = None) -> WorkspaceOut:
+    my_role = None
+    if user_id is not None:
+        my_role = next(
+            (m.role for m in workspace.members if m.user_id == user_id), None
+        )
     return WorkspaceOut(
         id=workspace.id,
         name=workspace.name,
         created_by=workspace.created_by,
         created_at=workspace.created_at,
         member_count=len(workspace.members),
+        my_role=my_role,
     )
 
 
@@ -60,7 +99,7 @@ async def create_workspace(
 ):
     repo = WorkspaceRepository(db)
     workspace = await repo.create(name=req.name, created_by=user.user_id)
-    return _to_out(workspace)
+    return _to_out(workspace, user.user_id)
 
 
 @router.get("", response_model=List[WorkspaceOut])
@@ -70,7 +109,7 @@ async def list_workspaces(
 ):
     repo = WorkspaceRepository(db)
     workspaces = await repo.list_for_user(user.user_id)
-    return [_to_out(w) for w in workspaces]
+    return [_to_out(w, user.user_id) for w in workspaces]
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceOut)
@@ -81,7 +120,7 @@ async def get_workspace(
 ):
     repo = WorkspaceRepository(db)
     workspace, _ = await require_member(repo, workspace_id, user)
-    return _to_out(workspace)
+    return _to_out(workspace, user.user_id)
 
 
 @router.get("/{workspace_id}/members", response_model=List[MemberOut])
@@ -108,6 +147,11 @@ async def create_workspace_invite(
     invite = await repo.create_invite(
         workspace_id=workspace_id, email=req.email, invited_by=user.user_id
     )
+    await audit.record(
+        db, actor_id=user.user_id, action="invite.created",
+        workspace_id=workspace_id, target_type="invite", target_id=invite.id,
+        detail={"email": req.email},
+    )
     return InviteOut(
         token=invite.id, workspace_id=invite.workspace_id, email=invite.email
     )
@@ -124,4 +168,306 @@ async def accept_workspace_invite(
     if not invite:
         raise NotFoundException("Invite not found")
     member = await repo.accept_invite(invite, user.user_id)
+    await audit.record(
+        db, actor_id=user.user_id, action="invite.accepted",
+        workspace_id=member.workspace_id, target_type="invite", target_id=token,
+    )
     return InviteAccepted(workspace_id=member.workspace_id, role=member.role)
+
+
+@router.get("/{workspace_id}/export")
+async def export_workspace_messages(
+    workspace_id: str,
+    channel_id: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """E-discovery export (#32): full message history as structured JSON.
+
+    Owner/Admin only. Optional single-channel scope and date range. Thread
+    structure survives via ``thread_parent_id``; attachments stay as stored
+    references. Every export writes an audit event.
+    """
+    repo = WorkspaceRepository(db)
+    await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+
+    ch_stmt = select(ChannelORM).where(ChannelORM.workspace_id == workspace_id)
+    if channel_id:
+        ch_stmt = ch_stmt.where(ChannelORM.id == channel_id)
+    channels = (await db.execute(ch_stmt.order_by(ChannelORM.created_at))).scalars().all()
+    if channel_id and not channels:
+        raise NotFoundException("Channel not found in this workspace")
+
+    out_channels = []
+    for ch in channels:
+        msg_stmt = select(ChannelMessageORM).where(
+            ChannelMessageORM.channel_id == ch.id
+        )
+        if start:
+            msg_stmt = msg_stmt.where(ChannelMessageORM.created_at >= start)
+        if end:
+            msg_stmt = msg_stmt.where(ChannelMessageORM.created_at <= end)
+        msgs = (
+            await db.execute(msg_stmt.order_by(ChannelMessageORM.created_at))
+        ).scalars().all()
+        out_channels.append({
+            "id": ch.id,
+            "name": ch.name,
+            "type": ch.type,
+            "messages": [
+                {
+                    "id": m.id,
+                    "user_id": m.user_id,
+                    "user_name": m.user_name,
+                    "content": m.content,
+                    "thread_parent_id": m.thread_parent_id,
+                    "reply_count": m.reply_count,
+                    "topic": m.topic,
+                    "attachments": json.loads(m.attachments) if m.attachments else None,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m in msgs
+            ],
+        })
+
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.exported",
+        workspace_id=workspace_id, target_type="export",
+        target_id=channel_id or "all-channels",
+        detail={
+            "channel_id": channel_id,
+            "start": start.isoformat() if start else None,
+            "end": end.isoformat() if end else None,
+            "channels": len(out_channels),
+            "messages": sum(len(c["messages"]) for c in out_channels),
+        },
+    )
+    return {
+        "workspace_id": workspace_id,
+        "range": {
+            "start": start.isoformat() if start else None,
+            "end": end.isoformat() if end else None,
+        },
+        "channels": out_channels,
+    }
+
+
+@router.post("/{workspace_id}/scim/token")
+async def issue_scim_token(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Issue (or rotate) the workspace's SCIM bearer token (#31).
+
+    Owner/Admin only. The plaintext token is returned exactly once; only its
+    hash is stored. Rotating invalidates the previous token immediately.
+    """
+    from app.api.v1.scim import generate_token, hash_token
+
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    token = generate_token()
+    workspace.scim_token_hash = hash_token(token)
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="scim.token_issued",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+    )
+    return {"token": token, "scim_base_url": f"/scim/v2/{workspace_id}"}
+
+
+@router.get("/{workspace_id}/settings/sso", response_model=SsoSettingsOut)
+async def get_sso_settings(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """SSO configuration is admin-only, even to read (#35)."""
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    return SsoSettingsOut(logto_organization_id=workspace.logto_organization_id)
+
+
+@router.put("/{workspace_id}/settings/sso", response_model=SsoSettingsOut)
+async def set_sso_settings(
+    workspace_id: str,
+    req: SsoSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Map this workspace to a Logto organization (#35, ADR 0001).
+
+    The IdP connector itself (SAML/OIDC metadata) is registered against that
+    organization in the self-hosted Logto console; the backend only stores
+    the mapping and enforces the token boundary.
+    """
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    old = workspace.logto_organization_id
+    workspace.logto_organization_id = req.logto_organization_id
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.sso_configured",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+        detail={"from": old, "to": req.logto_organization_id},
+    )
+    return SsoSettingsOut(logto_organization_id=req.logto_organization_id)
+
+
+@router.get("/{workspace_id}/settings/retention", response_model=RetentionPolicyOut)
+async def get_retention_policy(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user)
+    return RetentionPolicyOut(retention_days=workspace.retention_days)
+
+
+@router.put("/{workspace_id}/settings/retention", response_model=RetentionPolicyOut)
+async def set_retention_policy(
+    workspace_id: str,
+    req: RetentionPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Retention policy is Owner/Admin-only (#33). None = keep forever."""
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    old = workspace.retention_days
+    workspace.retention_days = req.retention_days
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.retention_changed",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+        detail={"from": old, "to": req.retention_days},
+    )
+    return RetentionPolicyOut(retention_days=req.retention_days)
+
+
+@router.get("/{workspace_id}/settings/models", response_model=ModelPolicyOut)
+async def get_model_policy(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user)
+    allowed, local_only = await model_policy.get_policy(db, workspace_id)
+    return ModelPolicyOut(allowed_models=allowed, local_only=local_only)
+
+
+@router.put("/{workspace_id}/settings/models", response_model=ModelPolicyOut)
+async def set_model_policy(
+    workspace_id: str,
+    req: ModelPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """AI model policy is Owner/Admin-only (#30)."""
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    workspace.allowed_models = (
+        json.dumps(req.allowed_models) if req.allowed_models is not None else None
+    )
+    workspace.local_only = req.local_only
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.model_policy_changed",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+        detail={"allowed_models": req.allowed_models, "local_only": req.local_only},
+    )
+    return ModelPolicyOut(allowed_models=req.allowed_models, local_only=req.local_only)
+
+
+async def _count_owners(repo: WorkspaceRepository, workspace_id: str) -> int:
+    members = await repo.list_members(workspace_id)
+    return sum(1 for m in members if m.role == "Owner")
+
+
+@router.patch("/{workspace_id}/members/{member_user_id}", response_model=MemberOut)
+async def change_member_role(
+    workspace_id: str,
+    member_user_id: str,
+    req: MemberRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Role changes are Owner/Admin-only; only an Owner may grant or revoke
+    the Owner role, and the last Owner can never be demoted (#27)."""
+    repo = WorkspaceRepository(db)
+    _, actor = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    target = await repo.get_member(workspace_id, member_user_id)
+    if not target:
+        raise NotFoundException("Member not found")
+    if (target.role == "Owner" or req.role == "Owner") and actor.role != "Owner":
+        raise ForbiddenException("Only an Owner can grant or revoke the Owner role")
+    if target.role == "Owner" and req.role != "Owner":
+        if await _count_owners(repo, workspace_id) <= 1:
+            raise ForbiddenException("Cannot demote the last Owner")
+    old_role = target.role
+    target.role = req.role
+    await db.commit()
+    await db.refresh(target)
+    await audit.record(
+        db, actor_id=user.user_id, action="member.role_changed",
+        workspace_id=workspace_id, target_type="member", target_id=member_user_id,
+        detail={"from": old_role, "to": req.role},
+    )
+    return MemberOut.model_validate(target)
+
+
+@router.delete("/{workspace_id}/members/{member_user_id}", status_code=204)
+async def remove_member(
+    workspace_id: str,
+    member_user_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Member removal is Owner/Admin-only; Owners can only be removed by an
+    Owner, and never the last one (#27)."""
+    repo = WorkspaceRepository(db)
+    _, actor = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    target = await repo.get_member(workspace_id, member_user_id)
+    if not target:
+        raise NotFoundException("Member not found")
+    if target.role == "Owner":
+        if actor.role != "Owner":
+            raise ForbiddenException("Only an Owner can remove an Owner")
+        if await _count_owners(repo, workspace_id) <= 1:
+            raise ForbiddenException("Cannot remove the last Owner")
+    await db.delete(target)
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="member.removed",
+        workspace_id=workspace_id, target_type="member", target_id=member_user_id,
+    )
+
+
+@router.get("/{workspace_id}/audit", response_model=List[AuditEventOut])
+async def list_audit_events(
+    workspace_id: str,
+    action: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Append-only audit trail (#26). Workspace Owner/Admin only; there is
+    deliberately no route that mutates audit rows."""
+    repo = WorkspaceRepository(db)
+    await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    stmt = select(AuditEventORM).where(AuditEventORM.workspace_id == workspace_id)
+    if action:
+        stmt = stmt.where(AuditEventORM.action == action)
+    stmt = (
+        stmt.order_by(AuditEventORM.created_at.desc(), AuditEventORM.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [AuditEventOut.model_validate(r) for r in rows]

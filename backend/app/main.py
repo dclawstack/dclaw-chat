@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -17,7 +18,10 @@ from app.core.database import engine, Base
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.migrations import check_database_revision
+from app.core.observability import setup_observability, setup_tracing
 from app.core.ratelimit import limiter
+from app.services.messaging import manager as ws_manager
+from app.services.retention import sweep_loop as retention_sweep_loop
 from app.api.v1 import api_router
 import app.models  # noqa: F401 — ensures all ORM tables are registered before create_all
 
@@ -48,7 +52,11 @@ async def lifespan(app: FastAPI):
     if settings.is_production:
         async with engine.connect() as conn:
             await conn.run_sync(check_database_revision)
+        await ws_manager.start_relay()  # cross-replica WS fan-out (#23)
+        retention_task = asyncio.create_task(retention_sweep_loop())  # #33
         yield
+        retention_task.cancel()
+        await ws_manager.stop_relay()
         await engine.dispose()
         return
 
@@ -111,8 +119,12 @@ async def lifespan(app: FastAPI):
                 ))
             except Exception:
                 pass
+    await ws_manager.start_relay()  # cross-replica WS fan-out (#23)
+    retention_task = asyncio.create_task(retention_sweep_loop())  # #33
     yield
     # Shutdown
+    retention_task.cancel()
+    await ws_manager.stop_relay()
     await engine.dispose()
 
 
@@ -162,8 +174,16 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+# Observability (#29): /metrics, /health/live, /health/ready + optional OTLP
+setup_observability(app)
+setup_tracing(app)
+
 # API Routes
 app.include_router(api_router, prefix="/api/v1")
+
+# SCIM 2.0 provisioning for enterprise IdPs (#31) — bearer-token auth, no JWT
+from app.api.v1.scim import router as scim_router  # noqa: E402
+app.include_router(scim_router, prefix="/scim/v2")
 
 
 @app.get("/health")

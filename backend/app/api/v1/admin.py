@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.ratelimit import limiter
+from app.services import audit
 from app.models.bot import BotORM
 from app.models.call import CallRoomORM
 from app.models.channel import ChannelMessageORM, ChannelORM
@@ -81,7 +82,10 @@ def _now() -> datetime:
 
 
 @router.post("/seed")
-async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
+async def seed_demo_data(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
     """Populate the database with realistic demo data across every feature."""
     # Clear first so seeding is idempotent
     await _wipe_all(db)
@@ -547,15 +551,21 @@ async def seed_demo_data(db: AsyncSession = Depends(get_db)) -> dict:
         counts["graph_edges"] += 1
 
     await db.commit()
+    await audit.record(db, actor_id=user.user_id, action="admin.seed")
     return {"status": "seeded", "counts": counts}
 
 
 @router.post("/clear")
 @limiter.limit("5/minute")
-async def clear_all_data(request: Request, db: AsyncSession = Depends(get_db)) -> dict:
+async def clear_all_data(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
     """Wipe all data from every table — both demo and user-created."""
     counts = await _wipe_all(db)
     await db.commit()
+    await audit.record(db, actor_id=user.user_id, action="admin.clear")
     return {"status": "cleared", "counts": counts}
 
 

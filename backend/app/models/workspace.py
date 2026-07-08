@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Boolean, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
 
@@ -18,6 +18,18 @@ class WorkspaceORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # AI model policy (#30): JSON list of allowed model ids (NULL = all),
+    # and a local-only switch that blocks every cloud provider.
+    allowed_models: Mapped[Optional[str]] = mapped_column(Text)
+    local_only: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    # Data retention (#33): purge messages older than N days. NULL = keep forever.
+    retention_days: Mapped[Optional[int]] = mapped_column(Integer)
+    # SCIM (#31): sha256 of the workspace's provisioning bearer token. NULL = SCIM off.
+    scim_token_hash: Mapped[Optional[str]] = mapped_column(String(64))
+    # Enterprise SSO (#35, ADR 0001): the Logto organization this workspace maps to.
+    logto_organization_id: Mapped[Optional[str]] = mapped_column(String(64))
 
     members: Mapped[List["WorkspaceMemberORM"]] = relationship(
         "WorkspaceMemberORM",

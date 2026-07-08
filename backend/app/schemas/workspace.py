@@ -1,5 +1,9 @@
 from datetime import datetime
+from typing import Literal, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
+
+WORKSPACE_ROLES = ("Owner", "Admin", "Member", "Guest")
 
 
 class WorkspaceCreate(BaseModel):
@@ -14,6 +18,39 @@ class WorkspaceOut(BaseModel):
     created_by: str
     created_at: datetime
     member_count: int = 0
+    # The caller's own role in this workspace — lets the UI hide admin controls.
+    my_role: Optional[str] = None
+
+
+class MemberRoleUpdate(BaseModel):
+    role: Literal["Owner", "Admin", "Member", "Guest"]
+
+
+class ModelPolicyOut(BaseModel):
+    allowed_models: Optional[list[str]] = None
+    local_only: bool = False
+
+
+class ModelPolicyUpdate(BaseModel):
+    allowed_models: Optional[list[str]] = None
+    local_only: bool = False
+
+
+class RetentionPolicyOut(BaseModel):
+    retention_days: Optional[int] = None
+
+
+class SsoSettingsOut(BaseModel):
+    logto_organization_id: Optional[str] = None
+
+
+class SsoSettingsUpdate(BaseModel):
+    logto_organization_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class RetentionPolicyUpdate(BaseModel):
+    # None = keep forever; otherwise purge messages older than N days.
+    retention_days: Optional[int] = Field(default=None, ge=1, le=3650)
 
 
 class MemberOut(BaseModel):

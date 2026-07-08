@@ -6,12 +6,15 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CatchMeUp } from "@/components/graph/CatchMeUp";
 import { UpgradeButton } from "@/components/billing/UpgradeButton";
+import { AuditLogPanel } from "@/components/workspace/AuditLogPanel";
+import { ModelPolicyToggle } from "@/components/workspace/ModelPolicyToggle";
 import { AuthUserButton } from "@/components/auth/UserButton";
 import { useWorkspaces } from "@/lib/useWorkspaces";
 import {
   createWorkspace,
   createWorkspaceInvite,
   acceptWorkspaceInvite,
+  exportWorkspaceMessages,
 } from "@/lib/api";
 import {
   Plus,
@@ -172,6 +175,10 @@ function CatchMeUpSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const currentWorkspace = workspaces.find((w) => w.id === currentId);
+  const isWorkspaceAdmin =
+    currentWorkspace?.my_role === "Owner" || currentWorkspace?.my_role === "Admin";
+
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -280,8 +287,8 @@ function CatchMeUpSection() {
             </button>
           </div>
 
-          {/* Invite a teammate (members of the selected workspace) */}
-          {currentId && (
+          {/* Invite a teammate — workspace Owners/Admins only (#27) */}
+          {currentId && isWorkspaceAdmin && (
             <div className="space-y-1">
               <div className="flex gap-1">
                 <input
@@ -316,6 +323,42 @@ function CatchMeUpSection() {
           )}
 
           {currentId && <UpgradeButton workspaceId={currentId} />}
+
+          {currentId && isWorkspaceAdmin && (
+            <ModelPolicyToggle workspaceId={currentId} />
+          )}
+
+          {currentId && isWorkspaceAdmin && (
+            <button
+              onClick={() =>
+                run(async () => {
+                  const data = await exportWorkspaceMessages(currentId);
+                  const blob = new Blob([JSON.stringify(data, null, 2)], {
+                    type: "application/json",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `workspace-${currentId}-export.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                })
+              }
+              disabled={busy}
+              className="w-full h-7 px-2 rounded-md border border-border text-xs font-medium hover:bg-accent disabled:opacity-50 text-left"
+            >
+              Export message history (JSON)
+            </button>
+          )}
+
+          {currentId && isWorkspaceAdmin && (
+            <details className="px-0">
+              <summary className="px-2 text-xs cursor-pointer text-muted-foreground hover:text-foreground">
+                Audit log
+              </summary>
+              <AuditLogPanel workspaceId={currentId} />
+            </details>
+          )}
 
           {currentId ? (
             <CatchMeUp workspaceId={currentId} />
