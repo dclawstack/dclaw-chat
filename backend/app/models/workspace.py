@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Boolean, String, Text, DateTime, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Boolean, Integer, String, Text, DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
 
@@ -24,6 +24,8 @@ class WorkspaceORM(Base):
     local_only: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+    # Data retention (#33): purge messages older than N days. NULL = keep forever.
+    retention_days: Mapped[Optional[int]] = mapped_column(Integer)
 
     members: Mapped[List["WorkspaceMemberORM"]] = relationship(
         "WorkspaceMemberORM",

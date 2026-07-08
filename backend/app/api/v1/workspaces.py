@@ -13,6 +13,8 @@ from app.schemas.workspace import (
     MemberRoleUpdate,
     ModelPolicyOut,
     ModelPolicyUpdate,
+    RetentionPolicyOut,
+    RetentionPolicyUpdate,
     InviteCreate,
     InviteOut,
     InviteAccepted,
@@ -230,6 +232,38 @@ async def export_workspace_messages(
         },
         "channels": out_channels,
     }
+
+
+@router.get("/{workspace_id}/settings/retention", response_model=RetentionPolicyOut)
+async def get_retention_policy(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user)
+    return RetentionPolicyOut(retention_days=workspace.retention_days)
+
+
+@router.put("/{workspace_id}/settings/retention", response_model=RetentionPolicyOut)
+async def set_retention_policy(
+    workspace_id: str,
+    req: RetentionPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Retention policy is Owner/Admin-only (#33). None = keep forever."""
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    old = workspace.retention_days
+    workspace.retention_days = req.retention_days
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.retention_changed",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+        detail={"from": old, "to": req.retention_days},
+    )
+    return RetentionPolicyOut(retention_days=req.retention_days)
 
 
 @router.get("/{workspace_id}/settings/models", response_model=ModelPolicyOut)

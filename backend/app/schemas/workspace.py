@@ -36,6 +36,15 @@ class ModelPolicyUpdate(BaseModel):
     local_only: bool = False
 
 
+class RetentionPolicyOut(BaseModel):
+    retention_days: Optional[int] = None
+
+
+class RetentionPolicyUpdate(BaseModel):
+    # None = keep forever; otherwise purge messages older than N days.
+    retention_days: Optional[int] = Field(default=None, ge=1, le=3650)
+
+
 class MemberOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
