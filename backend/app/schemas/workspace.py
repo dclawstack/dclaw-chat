@@ -40,6 +40,14 @@ class RetentionPolicyOut(BaseModel):
     retention_days: Optional[int] = None
 
 
+class SsoSettingsOut(BaseModel):
+    logto_organization_id: Optional[str] = None
+
+
+class SsoSettingsUpdate(BaseModel):
+    logto_organization_id: Optional[str] = Field(default=None, max_length=64)
+
+
 class RetentionPolicyUpdate(BaseModel):
     # None = keep forever; otherwise purge messages older than N days.
     retention_days: Optional[int] = Field(default=None, ge=1, le=3650)

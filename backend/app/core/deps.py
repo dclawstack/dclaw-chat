@@ -73,10 +73,14 @@ def decode_token(token: str) -> dict:
 
 
 class CurrentUser:
-    def __init__(self, user_id: str, email: str, role: str = "User"):
+    def __init__(self, user_id: str, email: str, role: str = "User",
+                 organizations=None):
         self.user_id = user_id
         self.email = email
         self.role = role
+        # Logto organization ids from the token (enterprise SSO, #35).
+        # None/[] for tokens without organization context.
+        self.organizations = organizations or []
 
 
 async def get_current_user(
@@ -100,7 +104,15 @@ async def get_current_user(
         if not user_id:
             raise UnauthorizedException("Invalid token: no subject")
 
-        return CurrentUser(user_id=user_id, email=email, role=role)
+        # Logto organization context (#35): either an `organizations` claim or
+        # organization-token audiences (urn:logto:organization:<id>).
+        orgs = list(payload.get("organizations") or [])
+        aud = payload.get("aud")
+        for a in aud if isinstance(aud, list) else ([aud] if aud else []):
+            if isinstance(a, str) and a.startswith("urn:logto:organization:"):
+                orgs.append(a.removeprefix("urn:logto:organization:"))
+
+        return CurrentUser(user_id=user_id, email=email, role=role, organizations=orgs)
 
     except jwt.ExpiredSignatureError:
         raise UnauthorizedException("Token expired")

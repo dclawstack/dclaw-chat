@@ -15,6 +15,8 @@ from app.schemas.workspace import (
     ModelPolicyUpdate,
     RetentionPolicyOut,
     RetentionPolicyUpdate,
+    SsoSettingsOut,
+    SsoSettingsUpdate,
     InviteCreate,
     InviteOut,
     InviteAccepted,
@@ -47,7 +49,25 @@ async def require_member(
     workspace = await repo.get_by_id(workspace_id)
     if not workspace:
         raise NotFoundException("Workspace not found")
+
+    # Enterprise SSO (#35): a token minted for one Logto organization never
+    # grants access to a workspace mapped to a different organization.
+    sso_org = workspace.logto_organization_id
+    token_orgs = getattr(user, "organizations", None) or []
+    if sso_org and token_orgs and sso_org not in token_orgs:
+        raise ForbiddenException("Token organization does not match this workspace")
+
     member = await repo.get_member(workspace_id, user.user_id)
+    if not member and sso_org and sso_org in token_orgs:
+        # JIT provisioning: IdP-verified organization members land in the
+        # workspace on first sign-in (Logto organizations, ADR 0001).
+        member = await repo.add_member(workspace_id, user.user_id, role="Member")
+        await audit.record(
+            repo.db, actor_id=user.user_id, action="sso.jit_provisioned",
+            workspace_id=workspace_id, target_type="member", target_id=user.user_id,
+        )
+        # The selectin-loaded members list predates the JIT insert.
+        await repo.db.refresh(workspace, attribute_names=["members"])
     if not member:
         raise ForbiddenException("Not a member of this workspace")
     if roles is not None and member.role not in roles:
@@ -257,6 +277,44 @@ async def issue_scim_token(
         workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
     )
     return {"token": token, "scim_base_url": f"/scim/v2/{workspace_id}"}
+
+
+@router.get("/{workspace_id}/settings/sso", response_model=SsoSettingsOut)
+async def get_sso_settings(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """SSO configuration is admin-only, even to read (#35)."""
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    return SsoSettingsOut(logto_organization_id=workspace.logto_organization_id)
+
+
+@router.put("/{workspace_id}/settings/sso", response_model=SsoSettingsOut)
+async def set_sso_settings(
+    workspace_id: str,
+    req: SsoSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Map this workspace to a Logto organization (#35, ADR 0001).
+
+    The IdP connector itself (SAML/OIDC metadata) is registered against that
+    organization in the self-hosted Logto console; the backend only stores
+    the mapping and enforces the token boundary.
+    """
+    repo = WorkspaceRepository(db)
+    workspace, _ = await require_member(repo, workspace_id, user, roles=("Owner", "Admin"))
+    old = workspace.logto_organization_id
+    workspace.logto_organization_id = req.logto_organization_id
+    await db.commit()
+    await audit.record(
+        db, actor_id=user.user_id, action="workspace.sso_configured",
+        workspace_id=workspace_id, target_type="workspace", target_id=workspace_id,
+        detail={"from": old, "to": req.logto_organization_id},
+    )
+    return SsoSettingsOut(logto_organization_id=req.logto_organization_id)
 
 
 @router.get("/{workspace_id}/settings/retention", response_model=RetentionPolicyOut)
